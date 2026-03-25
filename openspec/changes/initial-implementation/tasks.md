@@ -1,5 +1,7 @@
 # Tasks: Initial Implementation
 
+> **Note**: Update `specs.md` when new implementation constraints or constants are added.
+
 ## Phase 1: Foundation (TDD)
 
 ### T1: Error Types
