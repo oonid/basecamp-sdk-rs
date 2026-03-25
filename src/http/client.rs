@@ -1,10 +1,12 @@
 use crate::auth::AuthStrategy;
 use crate::config::Config;
 use crate::error::{self, BasecampError};
+use crate::http::retry::{should_retry_with_config, RetryDecision};
 use crate::security;
 use reqwest::{header, Client, Method, Response};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::sleep;
 use url::Url;
 
 const API_VERSION: &str = "3";
@@ -160,11 +162,11 @@ impl HttpClient {
 
         let req = self
             .inner
-            .request(method, &url)
+            .request(method.clone(), &url)
             .headers(headers)
             .multipart(form);
 
-        self.execute_request(req).await
+        self.execute_request(req, method, false).await
     }
 
     pub async fn get_no_retry(&self, path: &str) -> Result<Response, BasecampError> {
@@ -228,7 +230,7 @@ impl HttpClient {
         url: &str,
         params: Option<&[(&str, &str)]>,
         body: Option<&str>,
-        _operation: Option<&str>,
+        operation: Option<&str>,
     ) -> Result<Response, BasecampError> {
         let url = match params {
             Some(p) if !p.is_empty() => Self::add_query_params(url, p),
@@ -246,7 +248,8 @@ impl HttpClient {
                 .header(header::CONTENT_TYPE, "application/json");
         }
 
-        self.execute_request(req_builder).await
+        let is_idempotent = operation == Some("idempotent");
+        self.execute_request(req_builder, method, is_idempotent).await
     }
 
     async fn request_without_retry(
@@ -304,18 +307,71 @@ impl HttpClient {
 
         let req_builder = self
             .inner
-            .request(method, &url)
+            .request(method.clone(), &url)
             .headers(headers)
             .body(content.to_vec());
 
-        self.execute_request(req_builder).await
+        self.execute_request(req_builder, method, false).await
     }
 
     async fn execute_request(
         &self,
         req: reqwest::RequestBuilder,
+        method: Method,
+        is_idempotent: bool,
     ) -> Result<Response, BasecampError> {
-        let response = req.send().await.map_err(|e| {
+        let is_post = method == Method::POST;
+
+        let req_clone = match req.try_clone() {
+            Some(clone) => clone,
+            None => {
+                let built_req = req.build().map_err(|e| BasecampError::Network {
+                    message: format!("Failed to build request: {}", e),
+                })?;
+                return self.execute_single(built_req).await;
+            }
+        };
+
+        let built_req = req_clone.build().map_err(|e| BasecampError::Network {
+            message: format!("Failed to build request: {}", e),
+        })?;
+
+        let mut attempt = 1u32;
+
+        loop {
+            let req_for_exec = match built_req.try_clone() {
+                Some(r) => r,
+                None => return self.execute_single(built_req).await,
+            };
+
+            match self.execute_single(req_for_exec).await {
+                Ok(response) => return Ok(response),
+                Err(error) => {
+                    let retry_after = error.retry_after().map(Duration::from_secs);
+
+                    let decision = should_retry_with_config(
+                        &error,
+                        attempt,
+                        &self.config,
+                        is_idempotent,
+                        is_post,
+                        retry_after,
+                    );
+
+                    match decision {
+                        RetryDecision::Retry { delay } => {
+                            sleep(delay).await;
+                            attempt += 1;
+                        }
+                        RetryDecision::DontRetry => return Err(error),
+                    }
+                }
+            }
+        }
+    }
+
+    async fn execute_single(&self, req: reqwest::Request) -> Result<Response, BasecampError> {
+        let response = self.inner.execute(req).await.map_err(|e| {
             if e.is_timeout() {
                 BasecampError::Network {
                     message: format!("Request timed out: {}", e),
@@ -894,6 +950,293 @@ mod tests {
                 .unwrap();
 
             assert_eq!(response.status(), 201);
+        }
+    }
+
+    mod retry_integration {
+        use super::*;
+
+        fn create_test_client_with_retries(max_retries: u32) -> HttpClient {
+            let config = Config::builder()
+                .max_retries(max_retries)
+                .base_delay(Duration::from_millis(10))
+                .max_jitter(Duration::from_millis(0))
+                .build()
+                .unwrap();
+            let auth = BearerAuth::from_token("test-token");
+            HttpClient::new(config, auth).unwrap()
+        }
+
+        #[tokio::test]
+        async fn test_get_retries_on_503() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(2)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/retry.json", mock_server.uri());
+            let response = client.get(&url, None).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_get_retries_on_502() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(502))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/retry.json", mock_server.uri());
+            let response = client.get(&url, None).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_get_retries_on_500() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(500))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/retry.json", mock_server.uri());
+            let response = client.get(&url, None).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_429_respects_retry_after() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "1"))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/rate-limited.json", mock_server.uri());
+            let start = std::time::Instant::now();
+            let response = client.get(&url, None).await.unwrap();
+            let elapsed = start.elapsed();
+
+            assert_eq!(response.status(), 200);
+            assert!(elapsed >= Duration::from_secs(1), "Should have waited for Retry-After");
+        }
+
+        #[tokio::test]
+        async fn test_post_does_not_retry_by_default() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .respond_with(ResponseTemplate::new(503))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/no-retry.json", mock_server.uri());
+            let result = client.post(&url, Some(&serde_json::json!({"test": true})), None).await;
+
+            assert!(result.is_err());
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_post_retries_when_idempotent() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("POST"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/idempotent.json", mock_server.uri());
+            let response = client
+                .post(&url, Some(&serde_json::json!({"test": true})), Some("idempotent"))
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_404_not_retryable() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(404))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/not-found.json", mock_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::NotFound);
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_403_not_retryable() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(403))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/forbidden.json", mock_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::Forbidden);
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_401_not_retryable_directly() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(401))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/unauthorized.json", mock_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::AuthRequired);
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_validation_error_not_retryable() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .respond_with(ResponseTemplate::new(422).set_body_json(serde_json::json!({"errors": {}})))
+                .expect(1)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/validation.json", mock_server.uri());
+            let result = client.post(&url, Some(&serde_json::json!({})), None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::Validation);
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_exhausts_max_retries() {
+            let client = create_test_client_with_retries(2);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(503))
+                .expect(2)
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/exhaust.json", mock_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            mock_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_put_retries_on_503() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("PUT"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("PUT"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/put-retry.json", mock_server.uri());
+            let response = client.put(&url, Some(&serde_json::json!({"test": true})), None).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_delete_retries_on_503() {
+            let client = create_test_client_with_retries(3);
+            let mock_server = MockServer::start().await;
+
+            Mock::given(matchers::method("DELETE"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("DELETE"))
+                .respond_with(ResponseTemplate::new(204))
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/delete-retry.json", mock_server.uri());
+            let response = client.delete(&url, None).await.unwrap();
+
+            assert_eq!(response.status(), 204);
         }
     }
 }

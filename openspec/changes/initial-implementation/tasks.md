@@ -75,14 +75,14 @@
 - [x] Verify `cargo test` passes
 
 ### T9: Retry Logic
-- [ ] Create `src/http/retry.rs` with backoff calculation
-- [ ] Write unit tests for backoff formula: `base * 2^(attempt-1) + jitter`
-- [ ] Write integration tests for GET retry on 503
-- [ ] Write integration tests for 429 with Retry-After
-- [ ] Write integration tests for POST NOT retrying by default
-- [ ] Write integration tests for idempotent POST retrying
-- [ ] Write integration tests for non-retryable errors (404, 403)
-- [ ] Verify `cargo test` passes
+- [x] Create `src/http/retry.rs` with backoff calculation
+- [x] Write unit tests for backoff formula: `base * 2^(attempt-1) + jitter`
+- [x] Write integration tests for GET retry on 503
+- [x] Write integration tests for 429 with Retry-After
+- [x] Write integration tests for POST NOT retrying by default
+- [x] Write integration tests for idempotent POST retrying
+- [x] Write integration tests for non-retryable errors (404, 403)
+- [x] Verify `cargo test` passes
 
 ### T10: Token Refresh on 401
 - [ ] Write integration tests for 401 → refresh → retry
