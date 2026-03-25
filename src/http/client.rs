@@ -1,9 +1,12 @@
 use crate::auth::{AuthStrategy, TokenProvider};
 use crate::config::Config;
 use crate::error::{self, BasecampError, ErrorCode};
+use crate::hooks::BasecampHooks;
 use crate::http::retry::{should_retry_with_config, RetryDecision};
-use crate::security;
+use crate::pagination::{parse_next_link, parse_total_count, resolve_url, ListMeta, ListResult};
+use crate::security::{self, MAX_RESPONSE_BODY_BYTES};
 use reqwest::{header, Client, Method, Response};
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -24,6 +27,7 @@ pub struct HttpClient {
     auth: Arc<dyn AuthStrategy>,
     token_provider: Option<Arc<dyn TokenProvider>>,
     user_agent: String,
+    hooks: Option<Arc<dyn BasecampHooks>>,
 }
 
 impl HttpClient {
@@ -48,7 +52,13 @@ impl HttpClient {
             auth,
             token_provider,
             user_agent,
+            hooks: None,
         })
+    }
+
+    pub fn with_hooks(mut self, hooks: Arc<dyn BasecampHooks>) -> Self {
+        self.hooks = Some(hooks);
+        self
     }
 
     fn build_request(&self, info: &RequestInfo) -> reqwest::RequestBuilder {
@@ -203,6 +213,125 @@ impl HttpClient {
         let url = self.build_url(path)?;
         self.request_without_retry(Method::GET, &url, None, None)
             .await
+    }
+
+    pub async fn get_paginated<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        params: Option<&[(&str, &str)]>,
+    ) -> Result<ListResult<T>, BasecampError> {
+        let base_url = self.build_url(path)?;
+        let mut all_items = Vec::new();
+        let mut current_url = Some(base_url.clone());
+        let mut total_count: Option<u64> = Some(0);
+        let mut page_count = 0u32;
+        let max_pages = self.config.max_pages;
+        let max_items = self.config.max_items;
+
+        while let Some(url) = current_url.take() {
+            page_count += 1;
+
+            if let Some(ref hooks) = self.hooks {
+                hooks.on_paginate(&url, page_count);
+            }
+
+            if page_count > max_pages {
+                return Ok(ListResult {
+                    items: all_items,
+                    meta: ListMeta {
+                        total_count,
+                        truncated: true,
+                        next_url: Some(url),
+                    },
+                });
+            }
+
+            let response = self.get_absolute(&url, params).await?;
+
+            if let Some(content_length) = response.content_length() {
+                if content_length as usize > MAX_RESPONSE_BODY_BYTES {
+                    return Err(BasecampError::Usage {
+                        message: format!(
+                            "Response body too large ({} bytes, max {})",
+                            content_length, MAX_RESPONSE_BODY_BYTES
+                        ),
+                        hint: Some("Response exceeds maximum allowed size".to_string()),
+                    });
+                }
+            }
+
+            if page_count == 1 {
+                if let Some(count) = parse_total_count(response.headers()) {
+                    total_count = Some(count);
+                }
+            }
+
+            let link_header = response
+                .headers()
+                .get("Link")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+
+            let items: Vec<T> = response.json().await.map_err(|e| BasecampError::Network {
+                message: format!("Failed to parse response: {}", e),
+            })?;
+            all_items.extend(items);
+
+            if let Some(max) = max_items {
+                if all_items.len() >= max as usize {
+                    all_items.truncate(max as usize);
+                    return Ok(ListResult {
+                        items: all_items,
+                        meta: ListMeta {
+                            total_count,
+                            truncated: true,
+                            next_url: None,
+                        },
+                    });
+                }
+            }
+
+            if let Some(next_url) = parse_next_link(link_header.as_deref()) {
+                let resolved_next_url = resolve_url(&url, &next_url);
+
+                if !security::same_origin(&base_url, &resolved_next_url) {
+                    return Err(BasecampError::Usage {
+                        message: format!(
+                            "Pagination URL has different origin: {}",
+                            resolved_next_url
+                        ),
+                        hint: Some("Possible SSRF attack via Link header".to_string()),
+                    });
+                }
+
+                let is_localhost_url = Url::parse(&resolved_next_url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()))
+                    .map(|h| security::is_localhost(&h))
+                    .unwrap_or(false);
+
+                if !resolved_next_url.starts_with("https://") && !is_localhost_url {
+                    return Err(BasecampError::Usage {
+                        message: format!(
+                            "Pagination URL uses insecure protocol: {}",
+                            resolved_next_url
+                        ),
+                        hint: Some("Protocol downgrade not allowed".to_string()),
+                    });
+                }
+
+                current_url = Some(resolved_next_url);
+            }
+        }
+
+        Ok(ListResult {
+            items: all_items,
+            meta: ListMeta {
+                total_count,
+                truncated: false,
+                next_url: None,
+            },
+        })
     }
 
     fn build_url(&self, path: &str) -> Result<String, BasecampError> {
@@ -364,11 +493,10 @@ impl HttpClient {
                     if error.code() == ErrorCode::AuthRequired
                         && !refresh_attempted
                         && self.can_refresh_token()
+                        && self.attempt_token_refresh().await
                     {
-                        if self.attempt_token_refresh().await {
-                            refresh_attempted = true;
-                            continue;
-                        }
+                        refresh_attempted = true;
+                        continue;
                     }
 
                     let retry_after = error.retry_after().map(Duration::from_secs);
@@ -1464,6 +1592,254 @@ mod tests {
             assert!(result.is_err());
             assert_eq!(result.unwrap_err().code(), ErrorCode::AuthRequired);
             api_server.verify().await;
+        }
+    }
+
+    mod pagination {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_single_page_no_next_link() {
+            let (client, mock_server) = create_test_client_with_server().await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/items.json"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}, {"id": 2}]))
+                        .insert_header("X-Total-Count", "2"),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.meta.total_count, Some(2));
+            assert!(!result.meta.truncated);
+            assert!(result.meta.next_url.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_multi_page_fetch() {
+            let (client, mock_server) = create_test_client_with_server().await;
+            let base_uri = mock_server.uri();
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/items.json"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}]))
+                        .insert_header("Link", format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri))
+                        .insert_header("X-Total-Count", "3"),
+                )
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/items.json"))
+                .and(matchers::query_param("page", "2"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 2}, {"id": 3}])),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert_eq!(result.len(), 3);
+            assert_eq!(result.meta.total_count, Some(3));
+            assert!(!result.meta.truncated);
+        }
+
+        #[tokio::test]
+        async fn test_max_pages_limit_sets_truncated() {
+            let config = Config::builder()
+                .max_pages(2)
+                .build()
+                .unwrap();
+            let auth = BearerAuth::from_token("test-token");
+            let client = HttpClient::new(config, auth).unwrap();
+            let mock_server = MockServer::start().await;
+            let base_uri = mock_server.uri();
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}]))
+                        .insert_header("Link", format!(r#"<{}/items.json?page=999>; rel="next""#, base_uri)),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert_eq!(result.len(), 2);
+            assert!(result.meta.truncated);
+            assert!(result.meta.next_url.is_some());
+        }
+
+        #[tokio::test]
+        async fn test_max_items_cap() {
+            let config = Config::builder()
+                .max_items(3)
+                .build()
+                .unwrap();
+            let auth = BearerAuth::from_token("test-token");
+            let client = HttpClient::new(config, auth).unwrap();
+            let mock_server = MockServer::start().await;
+            let base_uri = mock_server.uri();
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/items.json"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}, {"id": 2}]))
+                        .insert_header("Link", format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri)),
+                )
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::query_param("page", "2"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 3}, {"id": 4}, {"id": 5}])),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert_eq!(result.len(), 3);
+            assert!(result.meta.truncated);
+            assert!(result.meta.next_url.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_same_origin_validation_rejects_different_origin() {
+            let (client, mock_server) = create_test_client_with_server().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}]))
+                        .insert_header("Link", r#"<https://evil.com/items>; rel="next""#),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: Result<ListResult<serde_json::Value>, _> = client.get_paginated(&url, None).await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert_eq!(err.code(), ErrorCode::Usage);
+            assert!(err.to_string().contains("different origin"));
+        }
+
+        #[tokio::test]
+        async fn test_protocol_downgrade_rejected() {
+            let (client, mock_server) = create_test_client_with_server().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}]))
+                        .insert_header("Link", r#"<http://evil.com/items>; rel="next""#),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: Result<ListResult<serde_json::Value>, _> = client.get_paginated(&url, None).await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert_eq!(err.code(), ErrorCode::Usage);
+            assert!(err.to_string().contains("different origin") || err.to_string().contains("insecure protocol"));
+        }
+
+        #[tokio::test]
+        async fn test_http_allowed_for_localhost() {
+            let (client, mock_server) = create_test_client_with_server().await;
+            let base_uri = mock_server.uri();
+            let http_uri = base_uri.replace("https://", "http://");
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/items.json"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}]))
+                        .insert_header("Link", format!(r#"<{}/items?page=2>; rel="next""#, http_uri))
+                        .insert_header("X-Total-Count", "2"),
+                )
+                .up_to_n_times(1)
+                .mount(&mock_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::query_param("page", "2"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 2}])),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/items.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert_eq!(result.len(), 2);
+        }
+
+        #[tokio::test]
+        async fn test_empty_result() {
+            let (client, mock_server) = create_test_client_with_server().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([])),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/empty.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+
+            assert!(result.is_empty());
+            assert!(!result.meta.truncated);
+        }
+
+        #[tokio::test]
+        async fn test_with_query_params() {
+            let (client, mock_server) = create_test_client_with_server().await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::path("/search.json"))
+                .and(matchers::query_param("q", "test"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(serde_json::json!([{"id": 1}])),
+                )
+                .mount(&mock_server)
+                .await;
+
+            let url = format!("{}/search.json", mock_server.uri());
+            let result: ListResult<serde_json::Value> = client
+                .get_paginated(&url, Some(&[("q", "test")]))
+                .await
+                .unwrap();
+
+            assert_eq!(result.len(), 1);
         }
     }
 }

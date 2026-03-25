@@ -1,6 +1,7 @@
 use reqwest::header::HeaderMap;
 use std::iter::IntoIterator;
 use std::slice::Iter;
+use url::Url;
 
 #[derive(Debug, Clone, Default)]
 pub struct ListMeta {
@@ -140,6 +141,18 @@ pub fn parse_total_count(headers: &HeaderMap) -> Option<u64> {
         .get("X-Total-Count")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse().ok())
+}
+
+pub fn resolve_url(base: &str, target: &str) -> String {
+    let base_url = match Url::parse(base) {
+        Ok(u) => u,
+        Err(_) => return target.to_string(),
+    };
+
+    match base_url.join(target) {
+        Ok(resolved) => resolved.to_string(),
+        Err(_) => target.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -435,6 +448,80 @@ mod tests {
         fn test_zero() {
             let headers = make_headers("X-Total-Count", "0");
             assert_eq!(parse_total_count(&headers), Some(0));
+        }
+    }
+
+    mod resolve_url_tests {
+        use super::*;
+
+        #[test]
+        fn test_relative_path() {
+            let base = "https://api.example.com/items.json";
+            let target = "/items.json?page=2";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://api.example.com/items.json?page=2"
+            );
+        }
+
+        #[test]
+        fn test_relative_with_query() {
+            let base = "https://api.example.com/buckets/123/items.json";
+            let target = "items.json?page=2&per_page=50";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://api.example.com/buckets/123/items.json?page=2&per_page=50"
+            );
+        }
+
+        #[test]
+        fn test_absolute_url() {
+            let base = "https://api.example.com/items.json";
+            let target = "https://other.example.com/different.json";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://other.example.com/different.json"
+            );
+        }
+
+        #[test]
+        fn test_same_origin_absolute() {
+            let base = "https://api.example.com/items.json";
+            let target = "https://api.example.com/items.json?page=2";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://api.example.com/items.json?page=2"
+            );
+        }
+
+        #[test]
+        fn test_relative_with_fragment() {
+            let base = "https://api.example.com/page";
+            let target = "#section";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://api.example.com/page#section"
+            );
+        }
+
+        #[test]
+        fn test_invalid_base_falls_back_to_target() {
+            let base = "not a valid url";
+            let target = "https://api.example.com/items.json";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://api.example.com/items.json"
+            );
+        }
+
+        #[test]
+        fn test_basecamp_style_pagination() {
+            let base = "https://3.basecampapi.com/999999999/buckets/123/messages.json";
+            let target = "/999999999/buckets/123/messages.json?page=2";
+            assert_eq!(
+                resolve_url(base, target),
+                "https://3.basecampapi.com/999999999/buckets/123/messages.json?page=2"
+            );
         }
     }
 }

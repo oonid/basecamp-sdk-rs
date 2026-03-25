@@ -100,22 +100,26 @@
 - [x] Verify `cargo test` passes
 
 ### T12: Auto-Pagination
-- [ ] Add `get_paginated()` to `HttpClient`
-- [ ] Write integration tests for multi-page fetch
-- [ ] Write integration tests for max_pages limit (truncated flag)
-- [ ] Write integration tests for max_items cap
-- [ ] Write integration tests for same-origin validation (SSRF prevention)
-- [ ] Write integration tests for protocol downgrade rejection
-- [ ] Verify `cargo test` passes
+- [x] Add `get_paginated()` to `HttpClient`
+- [x] Add minimal hooks stub (`src/hooks.rs`) for T12 compilation
+- [x] Add `with_hooks()` builder method to `HttpClient`
+- [x] Add `resolve_url()` for relative URL resolution (SSRF-safe)
+- [x] Write integration tests for multi-page fetch
+- [x] Write integration tests for max_pages limit (truncated flag)
+- [x] Write integration tests for max_items cap
+- [x] Write integration tests for same-origin validation (SSRF prevention)
+- [x] Write integration tests for protocol downgrade rejection
+- [x] Verify `cargo test` passes
 
 ## Phase 5: Client Layer (TDD)
 
 ### T13: Hooks
-- [ ] Create `src/hooks.rs` with `BasecampHooks` trait
-- [ ] Define `OperationInfo`, `RequestInfo`, `OperationResult`, `RequestResult`
+- [x] Create `src/hooks.rs` with `BasecampHooks` trait (minimal stub created in T12)
+- [x] Define `OperationInfo`, `RequestInfo`, `OperationResult`, `RequestResult` (structs only)
+- [ ] Implement `safe_hook()` panic catching
+- [ ] Implement `chain_hooks()` composition
+- [ ] Implement `ConsoleHooks`, `TimingHooks`
 - [ ] Write unit tests for hook invocation
-- [ ] Write unit tests for `safe_hook()` panic catching
-- [ ] Write unit tests for `chain_hooks()` composition
 - [ ] Verify `cargo test` passes
 
 ### T14: Client
