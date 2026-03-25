@@ -85,10 +85,10 @@
 - [x] Verify `cargo test` passes
 
 ### T10: Token Refresh on 401
-- [ ] Write integration tests for 401 → refresh → retry
-- [ ] Write integration tests for single refresh attempt
-- [ ] Write integration tests for failed refresh returning original error
-- [ ] Verify `cargo test` passes
+- [x] Write integration tests for 401 → refresh → retry
+- [x] Write integration tests for single refresh attempt
+- [x] Write integration tests for failed refresh returning original error
+- [x] Verify `cargo test` passes
 
 ## Phase 4: Pagination (TDD)
 

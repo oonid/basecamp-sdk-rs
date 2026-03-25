@@ -1,7 +1,13 @@
+use crate::auth::TokenProvider;
 use reqwest::header::HeaderMap;
+use std::sync::Arc;
 
 pub trait AuthStrategy: Send + Sync {
     fn authenticate(&self, headers: &mut HeaderMap);
+
+    fn token_provider(&self) -> Option<Arc<dyn TokenProvider>> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -45,5 +51,11 @@ mod tests {
         fn assert_send_sync<T: Send + Sync + ?Sized>() {}
         assert_send_sync::<MockAuthStrategy>();
         assert_send_sync::<dyn AuthStrategy>();
+    }
+
+    #[test]
+    fn test_default_token_provider_returns_none() {
+        let auth = MockAuthStrategy::new("test");
+        assert!(auth.token_provider().is_none());
     }
 }

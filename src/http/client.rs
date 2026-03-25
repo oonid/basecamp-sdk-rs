@@ -1,6 +1,6 @@
-use crate::auth::AuthStrategy;
+use crate::auth::{AuthStrategy, TokenProvider};
 use crate::config::Config;
-use crate::error::{self, BasecampError};
+use crate::error::{self, BasecampError, ErrorCode};
 use crate::http::retry::{should_retry_with_config, RetryDecision};
 use crate::security;
 use reqwest::{header, Client, Method, Response};
@@ -12,10 +12,17 @@ use url::Url;
 const API_VERSION: &str = "3";
 const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+struct RequestInfo {
+    method: Method,
+    url: String,
+    body: Option<String>,
+}
+
 pub struct HttpClient {
     inner: Client,
     config: Config,
     auth: Arc<dyn AuthStrategy>,
+    token_provider: Option<Arc<dyn TokenProvider>>,
     user_agent: String,
 }
 
@@ -32,12 +39,31 @@ impl HttpClient {
                 message: format!("Failed to create HTTP client: {}", e),
             })?;
 
+        let token_provider = auth.token_provider();
+        let auth: Arc<dyn AuthStrategy> = Arc::new(auth);
+
         Ok(Self {
             inner,
             config,
-            auth: Arc::from(Box::new(auth) as Box<dyn AuthStrategy>),
+            auth,
+            token_provider,
             user_agent,
         })
+    }
+
+    fn build_request(&self, info: &RequestInfo) -> reqwest::RequestBuilder {
+        let mut headers = self.base_headers();
+        self.auth.authenticate(&mut headers);
+
+        let mut req_builder = self.inner.request(info.method.clone(), &info.url).headers(headers);
+
+        if let Some(ref body) = info.body {
+            req_builder = req_builder
+                .body(body.clone())
+                .header(header::CONTENT_TYPE, "application/json");
+        }
+
+        req_builder
     }
 
     pub fn with_user_agent(mut self, user_agent: impl Into<String>) -> Self {
@@ -162,11 +188,15 @@ impl HttpClient {
 
         let req = self
             .inner
-            .request(method.clone(), &url)
+            .request(method, &url)
             .headers(headers)
-            .multipart(form);
+            .multipart(form)
+            .build()
+            .map_err(|e| BasecampError::Network {
+                message: format!("Failed to build request: {}", e),
+            })?;
 
-        self.execute_request(req, method, false).await
+        self.execute_single(req).await
     }
 
     pub async fn get_no_retry(&self, path: &str) -> Result<Response, BasecampError> {
@@ -237,19 +267,14 @@ impl HttpClient {
             _ => url.to_string(),
         };
 
-        let mut headers = self.base_headers();
-        self.auth.authenticate(&mut headers);
-
-        let mut req_builder = self.inner.request(method.clone(), &url).headers(headers);
-
-        if let Some(b) = body {
-            req_builder = req_builder
-                .body(b.to_string())
-                .header(header::CONTENT_TYPE, "application/json");
-        }
+        let request_info = RequestInfo {
+            method: method.clone(),
+            url,
+            body: body.map(|s| s.to_string()),
+        };
 
         let is_idempotent = operation == Some("idempotent");
-        self.execute_request(req_builder, method, is_idempotent).await
+        self.execute_request(&request_info, is_idempotent).await
     }
 
     async fn request_without_retry(
@@ -305,48 +330,47 @@ impl HttpClient {
         );
         self.auth.authenticate(&mut headers);
 
-        let req_builder = self
+        let req = self
             .inner
-            .request(method.clone(), &url)
+            .request(method, &url)
             .headers(headers)
-            .body(content.to_vec());
+            .body(content.to_vec())
+            .build()
+            .map_err(|e| BasecampError::Network {
+                message: format!("Failed to build request: {}", e),
+            })?;
 
-        self.execute_request(req_builder, method, false).await
+        self.execute_single(req).await
     }
 
     async fn execute_request(
         &self,
-        req: reqwest::RequestBuilder,
-        method: Method,
+        request_info: &RequestInfo,
         is_idempotent: bool,
     ) -> Result<Response, BasecampError> {
-        let is_post = method == Method::POST;
-
-        let req_clone = match req.try_clone() {
-            Some(clone) => clone,
-            None => {
-                let built_req = req.build().map_err(|e| BasecampError::Network {
-                    message: format!("Failed to build request: {}", e),
-                })?;
-                return self.execute_single(built_req).await;
-            }
-        };
-
-        let built_req = req_clone.build().map_err(|e| BasecampError::Network {
-            message: format!("Failed to build request: {}", e),
-        })?;
-
+        let is_post = request_info.method == Method::POST;
         let mut attempt = 1u32;
+        let mut refresh_attempted = false;
 
         loop {
-            let req_for_exec = match built_req.try_clone() {
-                Some(r) => r,
-                None => return self.execute_single(built_req).await,
-            };
+            let req_builder = self.build_request(request_info);
+            let built_req = req_builder.build().map_err(|e| BasecampError::Network {
+                message: format!("Failed to build request: {}", e),
+            })?;
 
-            match self.execute_single(req_for_exec).await {
+            match self.execute_single(built_req).await {
                 Ok(response) => return Ok(response),
                 Err(error) => {
+                    if error.code() == ErrorCode::AuthRequired
+                        && !refresh_attempted
+                        && self.can_refresh_token()
+                    {
+                        if self.attempt_token_refresh().await {
+                            refresh_attempted = true;
+                            continue;
+                        }
+                    }
+
                     let retry_after = error.retry_after().map(Duration::from_secs);
 
                     let decision = should_retry_with_config(
@@ -367,6 +391,20 @@ impl HttpClient {
                     }
                 }
             }
+        }
+    }
+
+    fn can_refresh_token(&self) -> bool {
+        match &self.token_provider {
+            Some(provider) => provider.refreshable(),
+            None => false,
+        }
+    }
+
+    async fn attempt_token_refresh(&self) -> bool {
+        match &self.token_provider {
+            Some(provider) if provider.refreshable() => provider.refresh().await,
+            _ => false,
         }
     }
 
@@ -1237,6 +1275,195 @@ mod tests {
             let response = client.delete(&url, None).await.unwrap();
 
             assert_eq!(response.status(), 204);
+        }
+    }
+
+    mod token_refresh_integration {
+        use super::*;
+        use crate::auth::{BearerAuth, OAuthTokenProvider};
+
+        #[tokio::test]
+        async fn test_401_triggers_refresh_and_retry() {
+            let api_server = MockServer::start().await;
+            let token_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .and(matchers::path("/token"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "access_token": "new-access-token",
+                    "refresh_token": "new-refresh-token",
+                    "expires_in": 3600
+                })))
+                .mount(&token_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::header("Authorization", "Bearer old-access-token"))
+                .respond_with(ResponseTemplate::new(401))
+                .up_to_n_times(1)
+                .mount(&api_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .and(matchers::header("Authorization", "Bearer new-access-token"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .mount(&api_server)
+                .await;
+
+            let oauth_provider = OAuthTokenProvider::new("old-access-token", "client-id", "client-secret")
+                .with_refresh_token("old-refresh-token")
+                .with_token_url(format!("{}/token", token_server.uri()));
+
+            let auth = BearerAuth::new(oauth_provider);
+            let config = Config::builder()
+                .max_retries(0)
+                .build()
+                .unwrap();
+            let client = HttpClient::new(config, auth).unwrap();
+
+            let url = format!("{}/protected.json", api_server.uri());
+            let response = client.get(&url, None).await.unwrap();
+
+            assert_eq!(response.status(), 200);
+        }
+
+        #[tokio::test]
+        async fn test_single_refresh_attempt_no_loop() {
+            let api_server = MockServer::start().await;
+            let token_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .and(matchers::path("/token"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "access_token": "refreshed-token",
+                    "refresh_token": "refreshed-refresh"
+                })))
+                .expect(1)
+                .mount(&token_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(401))
+                .expect(2)
+                .mount(&api_server)
+                .await;
+
+            let oauth_provider = OAuthTokenProvider::new("initial-token", "client-id", "client-secret")
+                .with_refresh_token("initial-refresh")
+                .with_token_url(format!("{}/token", token_server.uri()));
+
+            let auth = BearerAuth::new(oauth_provider);
+            let config = Config::builder()
+                .max_retries(0)
+                .build()
+                .unwrap();
+            let client = HttpClient::new(config, auth).unwrap();
+
+            let url = format!("{}/always-401.json", api_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), ErrorCode::AuthRequired);
+            token_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_failed_refresh_returns_original_error() {
+            let api_server = MockServer::start().await;
+            let token_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .and(matchers::path("/token"))
+                .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                    "error": "invalid_grant"
+                })))
+                .mount(&token_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(401))
+                .expect(1)
+                .mount(&api_server)
+                .await;
+
+            let oauth_provider = OAuthTokenProvider::new("expired-token", "client-id", "client-secret")
+                .with_refresh_token("expired-refresh")
+                .with_token_url(format!("{}/token", token_server.uri()));
+
+            let auth = BearerAuth::new(oauth_provider);
+            let config = Config::builder()
+                .max_retries(0)
+                .build()
+                .unwrap();
+            let client = HttpClient::new(config, auth).unwrap();
+
+            let url = format!("{}/protected.json", api_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), ErrorCode::AuthRequired);
+            api_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_no_refresh_without_refresh_token() {
+            let api_server = MockServer::start().await;
+            let token_server = MockServer::start().await;
+
+            Mock::given(matchers::method("POST"))
+                .and(matchers::path("/token"))
+                .respond_with(ResponseTemplate::new(200))
+                .expect(0)
+                .mount(&token_server)
+                .await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(401))
+                .expect(1)
+                .mount(&api_server)
+                .await;
+
+            let oauth_provider = OAuthTokenProvider::new("access-token", "client-id", "client-secret")
+                .with_token_url(format!("{}/token", token_server.uri()));
+
+            let auth = BearerAuth::new(oauth_provider);
+            let config = Config::builder()
+                .max_retries(0)
+                .build()
+                .unwrap();
+            let client = HttpClient::new(config, auth).unwrap();
+
+            let url = format!("{}/protected.json", api_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), ErrorCode::AuthRequired);
+            token_server.verify().await;
+        }
+
+        #[tokio::test]
+        async fn test_static_token_no_refresh_attempt() {
+            let api_server = MockServer::start().await;
+
+            Mock::given(matchers::method("GET"))
+                .respond_with(ResponseTemplate::new(401))
+                .expect(1)
+                .mount(&api_server)
+                .await;
+
+            let auth = BearerAuth::from_token("static-token");
+            let config = Config::builder()
+                .max_retries(0)
+                .build()
+                .unwrap();
+            let client = HttpClient::new(config, auth).unwrap();
+
+            let url = format!("{}/protected.json", api_server.uri());
+            let result = client.get(&url, None).await;
+
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().code(), ErrorCode::AuthRequired);
+            api_server.verify().await;
         }
     }
 }

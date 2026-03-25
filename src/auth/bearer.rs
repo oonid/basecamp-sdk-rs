@@ -32,6 +32,10 @@ impl AuthStrategy for BearerAuth {
             headers.insert(reqwest::header::AUTHORIZATION, value);
         }
     }
+
+    fn token_provider(&self) -> Option<Arc<dyn TokenProvider>> {
+        Some(self.provider.clone())
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +156,15 @@ mod tests {
             let auth = BearerAuth::from_token("test-token");
             assert_eq!(auth.provider().access_token(), "test-token");
             assert!(!auth.provider().refreshable());
+        }
+
+        #[test]
+        fn test_token_provider_returns_some() {
+            let auth = BearerAuth::from_token("test-token");
+            let provider = auth.token_provider();
+            assert!(provider.is_some());
+            let provider = provider.unwrap();
+            assert_eq!(provider.access_token(), "test-token");
         }
 
         #[test]
