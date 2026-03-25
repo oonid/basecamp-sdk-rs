@@ -275,8 +275,39 @@ impl AccountClient {
         self.account_id
     }
 
+    /// Build an account-scoped API path.
+    ///
+    /// The Basecamp 3 API uses account-scoped URLs of the form:
+    /// `/{account_id}{path}` - e.g., `/12345/projects.json`
+    ///
+    /// This prepends the account ID to the given path. The path should start with `/`.
+    ///
+    /// # Example
+    /// ```
+    /// // For account ID 12345 and path "/projects.json"
+    /// // Returns: "/12345/projects.json"
+    /// ```
+    ///
+    /// Note: For project-scoped resources (under `/buckets/{project_id}/...`),
+    /// use `bucket_path()` instead.
     pub fn account_path(&self, path: &str) -> String {
-        format!("/buckets/{}{}", self.account_id, path)
+        format!("/{}{}", self.account_id, path)
+    }
+
+    /// Build a project-scoped (bucket) API path.
+    ///
+    /// Many Basecamp 3 resources are scoped to a project (called a "bucket" in the API).
+    /// These URLs have the form: `/{account_id}/buckets/{project_id}{path}`
+    ///
+    /// # Example
+    /// ```
+    /// // For account ID 12345, project ID 67890, and path "/todos.json"
+    /// // Returns: "/12345/buckets/67890/todos.json"
+    /// ```
+    ///
+    /// This is the Rust equivalent of Python SDK's `BaseService._bucket_path()`.
+    pub fn bucket_path(&self, project_id: i64, path: &str) -> String {
+        format!("/{}/buckets/{}{}", self.account_id, project_id, path)
     }
 
     pub fn http(&self) -> &HttpClient {
@@ -506,17 +537,29 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_account_path_prepends_bucket() {
+        fn test_account_path_prepends_account_id() {
             let client = Client::new("test-token");
             let account = client.for_account(12345);
 
             assert_eq!(
                 account.account_path("/projects.json"),
-                "/buckets/12345/projects.json"
+                "/12345/projects.json"
+            );
+            assert_eq!(account.account_path("/todos.json"), "/12345/todos.json");
+        }
+
+        #[test]
+        fn test_bucket_path_for_project_scoped_resources() {
+            let client = Client::new("test-token");
+            let account = client.for_account(12345);
+
+            assert_eq!(
+                account.bucket_path(67890, "/todos.json"),
+                "/12345/buckets/67890/todos.json"
             );
             assert_eq!(
-                account.account_path("/todos/1.json"),
-                "/buckets/12345/todos/1.json"
+                account.bucket_path(67890, "/messages/1.json"),
+                "/12345/buckets/67890/messages/1.json"
             );
         }
 

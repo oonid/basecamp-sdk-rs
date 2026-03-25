@@ -183,8 +183,14 @@ impl AccountClient {
 ```rust
 impl AccountClient {
     /// Prepend account ID to a path.
-    /// Pattern: "/buckets/{account_id}{path}"
+    /// Pattern: "/{account_id}{path}"
+    /// Example: account_path("/projects.json") -> "/12345/projects.json"
     pub fn account_path(&self, path: &str) -> String;
+    
+    /// Build a project-scoped (bucket) path.
+    /// Pattern: "/{account_id}/buckets/{project_id}{path}"
+    /// Example: bucket_path(67890, "/todos.json") -> "/12345/buckets/67890/todos.json"
+    pub fn bucket_path(&self, project_id: i64, path: &str) -> String;
     
     /// Download a file from a raw URL.
     /// Follows the two-hop download flow.
@@ -195,11 +201,26 @@ impl AccountClient {
 }
 ```
 
+### URL Patterns
+
+The Basecamp 3 API uses two URL patterns:
+
+1. **Account-scoped** (account-level resources like projects list):
+   - Pattern: `/{account_id}{path}`
+   - Example: `/12345/projects.json`
+   - Use: `account_client.account_path("/projects.json")`
+
+2. **Project-scoped** (resources within a project/bucket):
+   - Pattern: `/{account_id}/buckets/{project_id}{path}`
+   - Example: `/12345/buckets/67890/todos.json`
+   - Use: `account_client.bucket_path(project_id, "/todos.json")`
+
 ### Verification
 
 - `[unit]` Services are lazy-loaded (created on first access)
 - `[unit]` Same service instance returned on repeated access
-- `[unit]` `account_path("/projects.json")` returns `"/buckets/{id}/projects.json"`
+- `[unit]` `account_path("/projects.json")` returns `"/{id}/projects.json"`
+- `[unit]` `bucket_path(project_id, "/todos.json")` returns `"/{id}/buckets/{project_id}/todos.json"`
 - `[conformance]` All 40 services are accessible
 - `[conformance]` Services use correct account context
 
