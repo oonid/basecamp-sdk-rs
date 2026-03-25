@@ -93,11 +93,11 @@
 ## Phase 4: Pagination (TDD)
 
 ### T11: Pagination Types
-- [ ] Create `src/pagination.rs`
-- [ ] Write unit tests for `parse_next_link()` with various formats
-- [ ] Write unit tests for `parse_total_count()`
-- [ ] Write unit tests for `ListResult<T>` iteration
-- [ ] Verify `cargo test` passes
+- [x] Create `src/pagination.rs`
+- [x] Write unit tests for `parse_next_link()` with various formats
+- [x] Write unit tests for `parse_total_count()`
+- [x] Write unit tests for `ListResult<T>` iteration
+- [x] Verify `cargo test` passes
 
 ### T12: Auto-Pagination
 - [ ] Add `get_paginated()` to `HttpClient`
