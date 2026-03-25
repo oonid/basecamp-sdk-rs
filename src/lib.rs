@@ -1,7 +1,9 @@
+pub mod auth;
 pub mod config;
 pub mod error;
 pub mod security;
 
+pub use auth::{AuthStrategy, TokenProvider};
 pub use config::{Config, ConfigBuilder, ConfigError};
 pub use error::{BasecampError, ErrorCode, FieldError};
 pub use security::{

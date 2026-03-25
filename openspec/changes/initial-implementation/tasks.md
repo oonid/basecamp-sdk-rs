@@ -36,11 +36,11 @@
 ## Phase 2: Authentication (TDD)
 
 ### T4: Auth Traits
-- [ ] Create `src/auth/mod.rs`
-- [ ] Create `src/auth/strategy.rs` with `AuthStrategy` trait
-- [ ] Create `src/auth/token.rs` with `TokenProvider` trait
-- [ ] Verify traits are `Send + Sync`
-- [ ] Verify `cargo test` passes
+- [x] Create `src/auth/mod.rs`
+- [x] Create `src/auth/strategy.rs` with `AuthStrategy` trait
+- [x] Create `src/auth/token.rs` with `TokenProvider` trait
+- [x] Verify traits are `Send + Sync`
+- [x] Verify `cargo test` passes
 
 ### T5: Static Token Provider
 - [ ] Implement `StaticTokenProvider` in `src/auth/token.rs`
