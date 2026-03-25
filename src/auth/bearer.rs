@@ -36,6 +36,10 @@ impl AuthStrategy for BearerAuth {
     fn token_provider(&self) -> Option<Arc<dyn TokenProvider>> {
         Some(self.provider.clone())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[cfg(test)]

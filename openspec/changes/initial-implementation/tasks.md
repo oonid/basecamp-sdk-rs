@@ -123,20 +123,20 @@
 - [x] Verify `cargo test` passes
 
 ### T14: Client
-- [ ] Create `src/client.rs` with `Client` and `ClientBuilder`
-- [ ] Write unit tests for `new(access_token)` convenience
-- [ ] Write unit tests for builder with various auth sources
-- [ ] Write unit tests for ambiguous auth detection (returns error)
-- [ ] Write unit tests for custom user agent
-- [ ] Write unit tests for `authorization()` service access
-- [ ] Verify `cargo test` passes
+- [x] Create `src/client.rs` with `Client` and `ClientBuilder`
+- [x] Write unit tests for `new(access_token)` convenience
+- [x] Write unit tests for builder with various auth sources
+- [x] Write unit tests for ambiguous auth detection (returns error)
+- [x] Write unit tests for custom user agent
+- [x] Write unit tests for `authorization()` service access
+- [x] Verify `cargo test` passes
 
 ### T15: AccountClient
-- [ ] Add `AccountClient` to `src/client.rs`
-- [ ] Write unit tests for `for_account(id)` construction
-- [ ] Write unit tests for `account_path()` path construction
+- [x] Add `AccountClient` to `src/client.rs`
+- [x] Write unit tests for `for_account(id)` construction
+- [x] Write unit tests for `account_path()` path construction
 - [ ] Write unit tests for lazy service loading
-- [ ] Write unit tests for `Clone` sharing HTTP pool
+- [x] Write unit tests for `Clone` sharing HTTP pool
 - [ ] Verify `cargo test` passes
 
 ## Phase 6: Conformance Tests

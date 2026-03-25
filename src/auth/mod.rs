@@ -39,6 +39,10 @@ mod tests {
                 "Bearer mock".parse().unwrap(),
             );
         }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
     }
 
     #[test]

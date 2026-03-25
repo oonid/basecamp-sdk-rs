@@ -92,6 +92,10 @@ impl HttpClient {
         &self.config
     }
 
+    pub fn user_agent(&self) -> &str {
+        &self.user_agent
+    }
+
     pub async fn get(
         &self,
         path: &str,

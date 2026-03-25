@@ -1,5 +1,6 @@
 use crate::auth::TokenProvider;
 use reqwest::header::HeaderMap;
+use std::any::Any;
 use std::sync::Arc;
 
 pub trait AuthStrategy: Send + Sync {
@@ -8,6 +9,8 @@ pub trait AuthStrategy: Send + Sync {
     fn token_provider(&self) -> Option<Arc<dyn TokenProvider>> {
         None
     }
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[cfg(test)]
@@ -32,6 +35,10 @@ mod tests {
                 reqwest::header::AUTHORIZATION,
                 format!("Bearer {}", self.token).parse().unwrap(),
             );
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

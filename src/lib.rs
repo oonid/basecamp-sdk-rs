@@ -1,15 +1,18 @@
 pub mod auth;
+pub mod client;
 pub mod config;
 pub mod error;
 pub mod hooks;
 pub mod http;
 pub mod pagination;
 pub mod security;
+pub mod services;
 
 pub use auth::{
     AuthStrategy, BearerAuth, OAuthToken, OAuthTokenProvider, OnRefreshCallback,
     StaticTokenProvider, TokenProvider,
 };
+pub use client::{AccountClient, Client, ClientBuilder, ClientError};
 pub use config::{Config, ConfigBuilder, ConfigError};
 pub use error::{BasecampError, ErrorCode, FieldError};
 pub use hooks::{
@@ -24,3 +27,4 @@ pub use security::{
     truncate, validate_header_value, validate_url_for_redirect, MAX_ERROR_BODY_BYTES,
     MAX_ERROR_MESSAGE_BYTES, MAX_RESPONSE_BODY_BYTES,
 };
+pub use services::{Authorization, AuthorizationService};
