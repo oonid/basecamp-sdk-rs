@@ -43,11 +43,11 @@
 - [x] Verify `cargo test` passes
 
 ### T5: Static Token Provider
-- [ ] Implement `StaticTokenProvider` in `src/auth/token.rs`
-- [ ] Write unit tests for token retrieval
-- [ ] Write unit tests verifying `refreshable()` returns false
-- [ ] Write unit tests verifying `refresh()` returns false
-- [ ] Verify `cargo test` passes
+- [x] Implement `StaticTokenProvider` in `src/auth/token.rs`
+- [x] Write unit tests for token retrieval
+- [x] Write unit tests verifying `refreshable()` returns false
+- [x] Write unit tests verifying `refresh()` returns false
+- [x] Verify `cargo test` passes
 
 ### T6: OAuth Token Provider
 - [ ] Create `src/auth/oauth.rs` with `OAuthTokenProvider`

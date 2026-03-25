@@ -2,7 +2,7 @@ mod strategy;
 mod token;
 
 pub use strategy::AuthStrategy;
-pub use token::TokenProvider;
+pub use token::{StaticTokenProvider, TokenProvider};
 
 #[cfg(test)]
 mod tests {
