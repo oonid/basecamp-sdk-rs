@@ -540,4 +540,124 @@ mod tests {
             assert_send_sync::<ClientBuilder>();
         }
     }
+
+    mod client_error {
+        use super::*;
+
+        #[test]
+        fn test_ambiguous_auth_display() {
+            let err = ClientError::AmbiguousAuth {
+                message: "test message".to_string(),
+            };
+            assert_eq!(format!("{}", err), "test message");
+        }
+
+        #[test]
+        fn test_no_auth_provider_display() {
+            let err = ClientError::NoAuthProvider {
+                message: "no auth".to_string(),
+            };
+            assert_eq!(format!("{}", err), "no auth");
+        }
+
+        #[test]
+        fn test_config_error_display() {
+            let err = ClientError::Config {
+                message: "config failed".to_string(),
+            };
+            assert_eq!(format!("{}", err), "config failed");
+        }
+
+        #[test]
+        fn test_client_error_is_std_error() {
+            let err = ClientError::NoAuthProvider {
+                message: "test".to_string(),
+            };
+            let _: &dyn std::error::Error = &err;
+        }
+    }
+
+    mod token_provider_wrapper {
+        use super::*;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingTokenProvider {
+            token: String,
+            refresh_count: AtomicUsize,
+        }
+
+        impl TokenProvider for CountingTokenProvider {
+            fn access_token(&self) -> String {
+                self.token.clone()
+            }
+
+            fn refresh(&self) -> Pin<Box<dyn Future<Output = bool> + Send + '_>> {
+                self.refresh_count.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async { true })
+            }
+
+            fn refreshable(&self) -> bool {
+                true
+            }
+        }
+
+        #[test]
+        fn test_wrapper_delegates_access_token() {
+            let provider = CountingTokenProvider {
+                token: "test-token".to_string(),
+                refresh_count: AtomicUsize::new(0),
+            };
+            let wrapper = TokenProviderWrapper(Arc::new(provider));
+            assert_eq!(wrapper.access_token(), "test-token");
+        }
+
+        #[test]
+        fn test_wrapper_delegates_refreshable() {
+            let provider = CountingTokenProvider {
+                token: "test-token".to_string(),
+                refresh_count: AtomicUsize::new(0),
+            };
+            let wrapper = TokenProviderWrapper(Arc::new(provider));
+            assert!(wrapper.refreshable());
+        }
+
+        #[tokio::test]
+        async fn test_wrapper_delegates_refresh() {
+            let provider = CountingTokenProvider {
+                token: "test-token".to_string(),
+                refresh_count: AtomicUsize::new(0),
+            };
+            let wrapper = TokenProviderWrapper(Arc::new(provider));
+            let result = wrapper.refresh().await;
+            assert!(result);
+        }
+    }
+
+    mod default_user_agent {
+        use super::*;
+
+        #[test]
+        fn test_default_user_agent_format() {
+            let client = Client::new("test-token");
+            let ua = client.http().user_agent();
+            assert!(ua.starts_with("basecamp-sdk-rust/"));
+            assert!(ua.contains("(api:3)"));
+        }
+    }
+
+    mod client_builder_default {
+        use super::*;
+
+        #[test]
+        fn test_builder_default_trait() {
+            let builder1 = ClientBuilder::default();
+            let builder2 = ClientBuilder::new();
+            let client1 = builder1.access_token("token1").build().unwrap();
+            let client2 = builder2.access_token("token2").build().unwrap();
+            assert_eq!(
+                client1.http().config().base_url,
+                client2.http().config().base_url
+            );
+        }
+    }
 }
