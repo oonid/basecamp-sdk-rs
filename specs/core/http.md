@@ -165,7 +165,7 @@ ALGORITHM should_retry(method, operation, error, attempt):
 ALGORITHM calculate_backoff(attempt):
   base_ms = config.base_delay.as_millis()
   jitter_ms = random(0, config.max_jitter.as_millis())
-  delay_ms = base_ms * (2 ^ attempt) + jitter_ms
+  delay_ms = base_ms * (2 ^ (attempt - 1)) + jitter_ms
   RETURN Duration::from_millis(delay_ms)
 ```
 

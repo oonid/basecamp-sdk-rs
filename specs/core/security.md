@@ -56,10 +56,12 @@ pub fn require_https(url: &str) -> Result<(), SecurityError> {
 
 /// Check if a host is localhost.
 pub fn is_localhost(host: &str) -> bool {
+    let lower = host.to_lowercase();
     matches!(
-        host.to_lowercase().as_str(),
+        lower.as_str(),
         "localhost" | "127.0.0.1" | "::1" | "0.0.0.0"
-    ) || host.starts_with("127.")
+    ) || lower.starts_with("127.")
+      || lower.ends_with(".localhost")
 }
 
 /// Check if a URL is localhost.
@@ -73,6 +75,7 @@ pub fn is_localhost_url(url: &str) -> bool {
 - `[unit]` HTTP URLs fail
 - `[unit]` Localhost HTTP URLs pass
 - `[unit]` 127.x.x.x addresses are localhost
+- `[unit]` *.localhost suffix is localhost
 - `[conformance]` Production API requires HTTPS
 
 ## Body Size Limits

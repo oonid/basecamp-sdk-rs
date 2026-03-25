@@ -136,6 +136,7 @@ impl HttpClient {
         let mut total_count = None;
         let mut page_count = 0;
         let max_pages = self.config.max_pages;
+        let max_items = self.config.max_items;
         
         while let Some(url) = current_url.take() {
             page_count += 1;
@@ -167,6 +168,21 @@ impl HttpClient {
             let items: Vec<T> = response.json().await?;
             all_items.extend(items);
             
+            // Check max_items cap
+            if let Some(max) = max_items {
+                if all_items.len() >= max {
+                    all_items.truncate(max);
+                    return Ok(ListResult {
+                        items: all_items,
+                        meta: ListMeta {
+                            total_count,
+                            truncated: true,
+                            next_url: None,
+                        },
+                    });
+                }
+            }
+            
             // Check for next page
             let link_header = response.headers()
                 .get("Link")
@@ -188,6 +204,7 @@ impl HttpClient {
 
 - `[unit]` Fetches all pages
 - `[unit]` Respects max_pages limit
+- `[unit]` Respects max_items cap
 - `[unit]` Sets truncated flag when limit hit
 - `[unit]` Extracts total_count from first page
 - `[unit]` Calls hooks on each page

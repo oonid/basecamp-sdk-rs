@@ -36,11 +36,14 @@ These tests verify the SDK behaves correctly against the actual Basecamp API.
 | H-001 | Base URL is `https://3.basecampapi.com` by default | `[conformance]` |
 | H-002 | Max retries defaults to 3 | `[conformance]` |
 | H-003 | Retry behavior matches specification | `[conformance]` |
-| H-004 | Backoff timing is correct | `[conformance]` |
+| H-004 | Backoff timing is correct (`base * 2^(attempt-1)`) | `[conformance]` |
 | H-005 | No infinite refresh loops | `[conformance]` |
 | H-006 | Retry-After delays are respected | `[conformance]` |
 | H-007 | Production API requires HTTPS | `[conformance]` |
 | H-008 | Prevents header injection attacks | `[conformance]` |
+| H-009 | GET retries on 503 with exponential backoff | `[conformance]` |
+| H-010 | POST does NOT retry by default (not idempotent) | `[conformance]` |
+| H-011 | Retry-After HTTP-date format supported | `[conformance]` |
 
 ### Error (`core/error.md`)
 
@@ -48,6 +51,12 @@ These tests verify the SDK behaves correctly against the actual Basecamp API.
 |----|-------------|--------------|
 | E-001 | HTTP status codes map correctly per specification | `[conformance]` |
 | E-002 | Request IDs are preserved | `[conformance]` |
+| E-003 | 401 maps to auth_required error code | `[conformance]` |
+| E-004 | 403 maps to forbidden error code | `[conformance]` |
+| E-005 | 404 maps to not_found error code | `[conformance]` |
+| E-006 | 422 maps to validation error code | `[conformance]` |
+| E-007 | 429 maps to rate_limit error code with retryable=true | `[conformance]` |
+| E-008 | 500/502/503/504 map to api_error with retryable=true | `[conformance]` |
 
 ### Pagination (`core/pagination.md`)
 
@@ -56,6 +65,9 @@ These tests verify the SDK behaves correctly against the actual Basecamp API.
 | P-001 | RFC 5988 Link header parsing compliant | `[conformance]` |
 | P-002 | Prevents SSRF via Link header | `[conformance]` |
 | P-003 | Handles real API responses | `[conformance]` |
+| P-004 | max_items cap stops pagination early | `[conformance]` |
+| P-005 | max_pages cap sets truncated flag | `[conformance]` |
+| P-006 | Missing X-Total-Count returns zero | `[conformance]` |
 
 ### Security (`core/security.md`)
 
@@ -68,6 +80,8 @@ These tests verify the SDK behaves correctly against the actual Basecamp API.
 | S-005 | Prevents open redirect attacks | `[conformance]` |
 | S-006 | Prevents header injection | `[conformance]` |
 | S-007 | All security constants match specification | `[conformance]` |
+| S-008 | HTTP allowed for localhost/127.x.x.x/*.localhost | `[conformance]` |
+| S-009 | Protocol downgrade in Link header rejected | `[conformance]` |
 
 ## Modules
 

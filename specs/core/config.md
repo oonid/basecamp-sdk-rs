@@ -36,6 +36,10 @@ pub struct Config {
     /// Maximum number of pages to fetch during pagination.
     /// Default: 10,000
     pub max_pages: u32,
+    
+    /// Maximum number of items to fetch across all pages.
+    /// Default: None (unlimited)
+    pub max_items: Option<u32>,
 }
 
 impl Default for Config {
@@ -47,6 +51,7 @@ impl Default for Config {
             base_delay: Duration::from_secs(1),
             max_jitter: Duration::from_millis(100),
             max_pages: 10_000,
+            max_items: None,
         }
     }
 }
@@ -95,6 +100,9 @@ impl ConfigBuilder {
     /// Set the maximum number of pages.
     pub fn max_pages(self, pages: u32) -> Self;
     
+    /// Set the maximum number of items across all pages.
+    pub fn max_items(self, items: u32) -> Self;
+    
     /// Build the configuration.
     pub fn build(self) -> Result<Config, ConfigError>;
 }
@@ -128,6 +136,7 @@ pub enum ConfigError {
 - `[static]` `base_delay` must be > 0
 - `[static]` `max_jitter` must be <= `base_delay`
 - `[static]` `max_pages` must be > 0
+- `[static]` `max_items` if set must be > 0
 - `[unit]` Invalid configuration returns appropriate `ConfigError`
 
 ## Environment Variables
@@ -165,6 +174,7 @@ let modified = Config::builder()
     .base_delay(config.base_delay)
     .max_jitter(config.max_jitter)
     .max_pages(config.max_pages)
+    .max_items(config.max_items.unwrap_or(10_000))
     .build()?;
 ```
 
