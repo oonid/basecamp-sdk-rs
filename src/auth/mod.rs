@@ -1,7 +1,9 @@
+mod bearer;
 mod oauth;
 mod strategy;
 mod token;
 
+pub use bearer::BearerAuth;
 pub use oauth::{OAuthToken, OAuthTokenProvider, OnRefreshCallback};
 pub use strategy::AuthStrategy;
 pub use token::{StaticTokenProvider, TokenProvider};

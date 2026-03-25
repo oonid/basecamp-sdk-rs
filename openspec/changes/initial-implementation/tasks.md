@@ -58,10 +58,10 @@
 - [x] Verify `cargo test` passes
 
 ### T7: Bearer Auth
-- [ ] Create `src/auth/bearer.rs` with `BearerAuth`
-- [ ] Write unit tests for Authorization header format
-- [ ] Write unit tests for header injection with dynamic token
-- [ ] Verify `cargo test` passes
+- [x] Create `src/auth/bearer.rs` with `BearerAuth`
+- [x] Write unit tests for Authorization header format
+- [x] Write unit tests for header injection with dynamic token
+- [x] Verify `cargo test` passes
 
 ## Phase 3: HTTP Layer (TDD)
 
