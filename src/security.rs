@@ -4,12 +4,22 @@ pub const MAX_RESPONSE_BODY_BYTES: usize = 50 * 1024 * 1024;
 pub const MAX_ERROR_BODY_BYTES: usize = 1024 * 1024;
 pub const MAX_ERROR_MESSAGE_BYTES: usize = 500;
 
+/// Sensitive HTTP headers that should be redacted in logs and error messages.
+///
+/// These headers contain authentication or session data that should never be
+/// exposed in plaintext. This list aligns with the Python SDK's sensitive
+/// headers to maintain consistency across all official Basecamp SDKs.
+///
+/// Added `x-csrf-token` to match Python SDK - CSRF tokens are session-bound
+/// and should be treated as sensitive to prevent cross-site request forgery
+/// attacks via log leakage.
 pub const SENSITIVE_HEADERS: &[&str] = &[
     "authorization",
     "cookie",
     "set-cookie",
     "x-api-key",
     "x-auth-token",
+    "x-csrf-token",
 ];
 
 pub fn require_https(url: &str) -> Result<(), String> {

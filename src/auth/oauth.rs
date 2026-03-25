@@ -124,11 +124,24 @@ impl TokenProvider for OAuthTokenProvider {
                 return false;
             };
 
+            // Basecamp Launchpad Token Refresh Format
+            // 
+            // Basecamp's Launchpad OAuth endpoint uses a non-standard form format
+            // for token refresh. Instead of the standard OAuth 2.0 `grant_type=refresh_token`,
+            // Launchpad expects `type=refresh`. This is documented in the official SDK spec:
+            // 
+            // - Python SDK: uses `type=refresh` (auth.py:96)
+            // - Ruby SDK: uses `type=refresh` (oauth_token_provider.rb)
+            // - TypeScript SDK: sends both `type=refresh` AND `grant_type=refresh_token`
+            // - Go SDK: uses `grant_type=refresh_token` with client credentials
+            // 
+            // We use `type=refresh` to match Python/Ruby for Launchpad compatibility.
+            // See vendor/basecamp-sdk/SPEC.md §4 "Token Refresh" for details.
             let response = self
                 .client
                 .post(&self.token_url)
                 .form(&[
-                    ("grant_type", "refresh_token"),
+                    ("type", "refresh"),
                     ("refresh_token", &refresh_token),
                     ("client_id", &self.client_id),
                     ("client_secret", &self.client_secret),
@@ -433,7 +446,7 @@ mod tests {
             let mock_server = MockServer::start().await;
 
             Mock::given(matchers::method("POST"))
-                .and(matchers::body_string_contains("grant_type=refresh_token"))
+                .and(matchers::body_string_contains("type=refresh"))
                 .and(matchers::body_string_contains("refresh_token=my-refresh-token"))
                 .and(matchers::body_string_contains("client_id=my-client-id"))
                 .and(matchers::body_string_contains("client_secret=my-client-secret"))

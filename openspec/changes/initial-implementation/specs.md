@@ -45,6 +45,8 @@ This document captures the specification deltas for the initial implementation c
   - HTTPS required except for localhost (127.x.x.x, *.localhost)
   - CRLF injection prevention in headers
   - Same-origin validation for pagination links
+  - Sensitive headers for redaction (per Python SDK):
+    - `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, `x-csrf-token`
 
 ### Authentication (src/auth/)
 - Per `specs/core/auth.md`:
@@ -52,7 +54,11 @@ This document captures the specification deltas for the initial implementation c
   - `AuthStrategy` trait with `apply_auth()`
   - `BearerAuth` implementation
   - Token URL: `https://launchpad.37signals.com/authorization/token`
-  - Legacy form format for Launchpad compatibility
+  - Legacy form format for Launchpad compatibility:
+    - OAuth refresh uses `type=refresh` (not `grant_type=refresh_token`)
+    - Per SPEC.md §4: "Uses legacy form format for Launchpad compatibility"
+    - Python SDK sends: `type=refresh`, `refresh_token`, `client_id`, `client_secret`
+    - TypeScript SDK sends both `type=refresh` AND `grant_type=refresh_token`
 
 ### HTTP Client (src/http/)
 - Per `specs/core/http.md`:
