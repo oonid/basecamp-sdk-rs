@@ -3,33 +3,33 @@
 ## Phase 1: Foundation (TDD)
 
 ### T1: Error Types
-- [ ] Create `src/error.rs` with error taxonomy using `thiserror`
-- [ ] Write unit tests for all error codes
-- [ ] Write unit tests for HTTP status → error mapping
-- [ ] Write unit tests for message truncation (500 bytes)
-- [ ] Write unit tests for request ID extraction
-- [ ] Write unit tests for retry-after parsing (seconds and HTTP-date)
-- [ ] Verify `cargo test` passes
+- [x] Create `src/error.rs` with error taxonomy using `thiserror`
+- [x] Write unit tests for all error codes
+- [x] Write unit tests for HTTP status → error mapping
+- [x] Write unit tests for message truncation (500 bytes)
+- [x] Write unit tests for request ID extraction
+- [x] Write unit tests for retry-after parsing (seconds and HTTP-date)
+- [x] Verify `cargo test` passes
 
 ### T2: Configuration
-- [ ] Create `src/config.rs` with `Config` struct and defaults
-- [ ] Create `ConfigBuilder` with validation
-- [ ] Write unit tests for default values
-- [ ] Write unit tests for builder validation errors
-- [ ] Write unit tests for `from_env()` parsing
-- [ ] Add `max_items: Option<u32>` config option
-- [ ] Verify `cargo test` passes
+- [x] Create `src/config.rs` with `Config` struct and defaults
+- [x] Create `ConfigBuilder` with validation
+- [x] Write unit tests for default values
+- [x] Write unit tests for builder validation errors
+- [x] Write unit tests for `from_env()` parsing
+- [x] Add `max_items: Option<u32>` config option
+- [x] Verify `cargo test` passes
 
 ### T3: Security Utilities
-- [ ] Create `src/security.rs` with security helpers
-- [ ] Write unit tests for `require_https()` 
-- [ ] Write unit tests for `is_localhost()` (including *.localhost)
-- [ ] Write unit tests for `truncate()` (UTF-8 boundary)
-- [ ] Write unit tests for `same_origin()`
-- [ ] Write unit tests for `check_body_size()`
-- [ ] Write unit tests for `redact_headers()`
-- [ ] Write unit tests for `contains_crlf()` (header injection)
-- [ ] Verify `cargo test` passes
+- [x] Create `src/security.rs` with security helpers
+- [x] Write unit tests for `require_https()` 
+- [x] Write unit tests for `is_localhost()` (including *.localhost)
+- [x] Write unit tests for `truncate()` (UTF-8 boundary)
+- [x] Write unit tests for `same_origin()`
+- [x] Write unit tests for `check_body_size()`
+- [x] Write unit tests for `redact_headers()`
+- [x] Write unit tests for `contains_crlf()` (header injection)
+- [x] Verify `cargo test` passes
 
 ## Phase 2: Authentication (TDD)
 
