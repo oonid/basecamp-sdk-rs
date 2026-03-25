@@ -1,0 +1,3 @@
+[submodule "vendor/basecamp-sdk"]
+	path = vendor/basecamp-sdk
+	url = git@github.com:basecamp/basecamp-sdk.git
