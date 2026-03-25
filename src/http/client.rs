@@ -65,7 +65,10 @@ impl HttpClient {
         let mut headers = self.base_headers();
         self.auth.authenticate(&mut headers);
 
-        let mut req_builder = self.inner.request(info.method.clone(), &info.url).headers(headers);
+        let mut req_builder = self
+            .inner
+            .request(info.method.clone(), &info.url)
+            .headers(headers);
 
         if let Some(ref body) = info.body {
             req_builder = req_builder
@@ -1145,7 +1148,9 @@ mod tests {
                 .await;
 
             Mock::given(matchers::method("GET"))
-                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})),
+                )
                 .mount(&mock_server)
                 .await;
 
@@ -1211,7 +1216,9 @@ mod tests {
                 .await;
 
             Mock::given(matchers::method("GET"))
-                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})),
+                )
                 .mount(&mock_server)
                 .await;
 
@@ -1221,7 +1228,10 @@ mod tests {
             let elapsed = start.elapsed();
 
             assert_eq!(response.status(), 200);
-            assert!(elapsed >= Duration::from_secs(1), "Should have waited for Retry-After");
+            assert!(
+                elapsed >= Duration::from_secs(1),
+                "Should have waited for Retry-After"
+            );
         }
 
         #[tokio::test]
@@ -1236,7 +1246,9 @@ mod tests {
                 .await;
 
             let url = format!("{}/no-retry.json", mock_server.uri());
-            let result = client.post(&url, Some(&serde_json::json!({"test": true})), None).await;
+            let result = client
+                .post(&url, Some(&serde_json::json!({"test": true})), None)
+                .await;
 
             assert!(result.is_err());
             mock_server.verify().await;
@@ -1254,13 +1266,19 @@ mod tests {
                 .await;
 
             Mock::given(matchers::method("POST"))
-                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})),
+                )
                 .mount(&mock_server)
                 .await;
 
             let url = format!("{}/idempotent.json", mock_server.uri());
             let response = client
-                .post(&url, Some(&serde_json::json!({"test": true})), Some("idempotent"))
+                .post(
+                    &url,
+                    Some(&serde_json::json!({"test": true})),
+                    Some("idempotent"),
+                )
                 .await
                 .unwrap();
 
@@ -1282,7 +1300,10 @@ mod tests {
             let result = client.get(&url, None).await;
 
             assert!(result.is_err());
-            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::NotFound);
+            assert_eq!(
+                result.unwrap_err().code(),
+                crate::error::ErrorCode::NotFound
+            );
             mock_server.verify().await;
         }
 
@@ -1301,7 +1322,10 @@ mod tests {
             let result = client.get(&url, None).await;
 
             assert!(result.is_err());
-            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::Forbidden);
+            assert_eq!(
+                result.unwrap_err().code(),
+                crate::error::ErrorCode::Forbidden
+            );
             mock_server.verify().await;
         }
 
@@ -1320,7 +1344,10 @@ mod tests {
             let result = client.get(&url, None).await;
 
             assert!(result.is_err());
-            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::AuthRequired);
+            assert_eq!(
+                result.unwrap_err().code(),
+                crate::error::ErrorCode::AuthRequired
+            );
             mock_server.verify().await;
         }
 
@@ -1330,7 +1357,9 @@ mod tests {
             let mock_server = MockServer::start().await;
 
             Mock::given(matchers::method("POST"))
-                .respond_with(ResponseTemplate::new(422).set_body_json(serde_json::json!({"errors": {}})))
+                .respond_with(
+                    ResponseTemplate::new(422).set_body_json(serde_json::json!({"errors": {}})),
+                )
                 .expect(1)
                 .mount(&mock_server)
                 .await;
@@ -1339,7 +1368,10 @@ mod tests {
             let result = client.post(&url, Some(&serde_json::json!({})), None).await;
 
             assert!(result.is_err());
-            assert_eq!(result.unwrap_err().code(), crate::error::ErrorCode::Validation);
+            assert_eq!(
+                result.unwrap_err().code(),
+                crate::error::ErrorCode::Validation
+            );
             mock_server.verify().await;
         }
 
@@ -1378,7 +1410,10 @@ mod tests {
                 .await;
 
             let url = format!("{}/put-retry.json", mock_server.uri());
-            let response = client.put(&url, Some(&serde_json::json!({"test": true})), None).await.unwrap();
+            let response = client
+                .put(&url, Some(&serde_json::json!({"test": true})), None)
+                .await
+                .unwrap();
 
             assert_eq!(response.status(), 200);
         }
@@ -1434,19 +1469,19 @@ mod tests {
 
             Mock::given(matchers::method("GET"))
                 .and(matchers::header("Authorization", "Bearer new-access-token"))
-                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})),
+                )
                 .mount(&api_server)
                 .await;
 
-            let oauth_provider = OAuthTokenProvider::new("old-access-token", "client-id", "client-secret")
-                .with_refresh_token("old-refresh-token")
-                .with_token_url(format!("{}/token", token_server.uri()));
+            let oauth_provider =
+                OAuthTokenProvider::new("old-access-token", "client-id", "client-secret")
+                    .with_refresh_token("old-refresh-token")
+                    .with_token_url(format!("{}/token", token_server.uri()));
 
             let auth = BearerAuth::new(oauth_provider);
-            let config = Config::builder()
-                .max_retries(0)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_retries(0).build().unwrap();
             let client = HttpClient::new(config, auth).unwrap();
 
             let url = format!("{}/protected.json", api_server.uri());
@@ -1476,15 +1511,13 @@ mod tests {
                 .mount(&api_server)
                 .await;
 
-            let oauth_provider = OAuthTokenProvider::new("initial-token", "client-id", "client-secret")
-                .with_refresh_token("initial-refresh")
-                .with_token_url(format!("{}/token", token_server.uri()));
+            let oauth_provider =
+                OAuthTokenProvider::new("initial-token", "client-id", "client-secret")
+                    .with_refresh_token("initial-refresh")
+                    .with_token_url(format!("{}/token", token_server.uri()));
 
             let auth = BearerAuth::new(oauth_provider);
-            let config = Config::builder()
-                .max_retries(0)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_retries(0).build().unwrap();
             let client = HttpClient::new(config, auth).unwrap();
 
             let url = format!("{}/always-401.json", api_server.uri());
@@ -1514,15 +1547,13 @@ mod tests {
                 .mount(&api_server)
                 .await;
 
-            let oauth_provider = OAuthTokenProvider::new("expired-token", "client-id", "client-secret")
-                .with_refresh_token("expired-refresh")
-                .with_token_url(format!("{}/token", token_server.uri()));
+            let oauth_provider =
+                OAuthTokenProvider::new("expired-token", "client-id", "client-secret")
+                    .with_refresh_token("expired-refresh")
+                    .with_token_url(format!("{}/token", token_server.uri()));
 
             let auth = BearerAuth::new(oauth_provider);
-            let config = Config::builder()
-                .max_retries(0)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_retries(0).build().unwrap();
             let client = HttpClient::new(config, auth).unwrap();
 
             let url = format!("{}/protected.json", api_server.uri());
@@ -1551,14 +1582,12 @@ mod tests {
                 .mount(&api_server)
                 .await;
 
-            let oauth_provider = OAuthTokenProvider::new("access-token", "client-id", "client-secret")
-                .with_token_url(format!("{}/token", token_server.uri()));
+            let oauth_provider =
+                OAuthTokenProvider::new("access-token", "client-id", "client-secret")
+                    .with_token_url(format!("{}/token", token_server.uri()));
 
             let auth = BearerAuth::new(oauth_provider);
-            let config = Config::builder()
-                .max_retries(0)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_retries(0).build().unwrap();
             let client = HttpClient::new(config, auth).unwrap();
 
             let url = format!("{}/protected.json", api_server.uri());
@@ -1580,10 +1609,7 @@ mod tests {
                 .await;
 
             let auth = BearerAuth::from_token("static-token");
-            let config = Config::builder()
-                .max_retries(0)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_retries(0).build().unwrap();
             let client = HttpClient::new(config, auth).unwrap();
 
             let url = format!("{}/protected.json", api_server.uri());
@@ -1613,7 +1639,8 @@ mod tests {
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert_eq!(result.len(), 2);
             assert_eq!(result.meta.total_count, Some(2));
@@ -1631,7 +1658,10 @@ mod tests {
                 .respond_with(
                     ResponseTemplate::new(200)
                         .set_body_json(serde_json::json!([{"id": 1}]))
-                        .insert_header("Link", format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri))
+                        .insert_header(
+                            "Link",
+                            format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri),
+                        )
                         .insert_header("X-Total-Count", "3"),
                 )
                 .up_to_n_times(1)
@@ -1649,7 +1679,8 @@ mod tests {
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert_eq!(result.len(), 3);
             assert_eq!(result.meta.total_count, Some(3));
@@ -1658,10 +1689,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_max_pages_limit_sets_truncated() {
-            let config = Config::builder()
-                .max_pages(2)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_pages(2).build().unwrap();
             let auth = BearerAuth::from_token("test-token");
             let client = HttpClient::new(config, auth).unwrap();
             let mock_server = MockServer::start().await;
@@ -1671,13 +1699,17 @@ mod tests {
                 .respond_with(
                     ResponseTemplate::new(200)
                         .set_body_json(serde_json::json!([{"id": 1}]))
-                        .insert_header("Link", format!(r#"<{}/items.json?page=999>; rel="next""#, base_uri)),
+                        .insert_header(
+                            "Link",
+                            format!(r#"<{}/items.json?page=999>; rel="next""#, base_uri),
+                        ),
                 )
                 .mount(&mock_server)
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert_eq!(result.len(), 2);
             assert!(result.meta.truncated);
@@ -1686,10 +1718,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_max_items_cap() {
-            let config = Config::builder()
-                .max_items(3)
-                .build()
-                .unwrap();
+            let config = Config::builder().max_items(3).build().unwrap();
             let auth = BearerAuth::from_token("test-token");
             let client = HttpClient::new(config, auth).unwrap();
             let mock_server = MockServer::start().await;
@@ -1700,7 +1729,10 @@ mod tests {
                 .respond_with(
                     ResponseTemplate::new(200)
                         .set_body_json(serde_json::json!([{"id": 1}, {"id": 2}]))
-                        .insert_header("Link", format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri)),
+                        .insert_header(
+                            "Link",
+                            format!(r#"<{}/items.json?page=2>; rel="next""#, base_uri),
+                        ),
                 )
                 .up_to_n_times(1)
                 .mount(&mock_server)
@@ -1716,7 +1748,8 @@ mod tests {
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert_eq!(result.len(), 3);
             assert!(result.meta.truncated);
@@ -1737,7 +1770,8 @@ mod tests {
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: Result<ListResult<serde_json::Value>, _> = client.get_paginated(&url, None).await;
+            let result: Result<ListResult<serde_json::Value>, _> =
+                client.get_paginated(&url, None).await;
 
             assert!(result.is_err());
             let err = result.unwrap_err();
@@ -1759,12 +1793,16 @@ mod tests {
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: Result<ListResult<serde_json::Value>, _> = client.get_paginated(&url, None).await;
+            let result: Result<ListResult<serde_json::Value>, _> =
+                client.get_paginated(&url, None).await;
 
             assert!(result.is_err());
             let err = result.unwrap_err();
             assert_eq!(err.code(), ErrorCode::Usage);
-            assert!(err.to_string().contains("different origin") || err.to_string().contains("insecure protocol"));
+            assert!(
+                err.to_string().contains("different origin")
+                    || err.to_string().contains("insecure protocol")
+            );
         }
 
         #[tokio::test]
@@ -1778,7 +1816,10 @@ mod tests {
                 .respond_with(
                     ResponseTemplate::new(200)
                         .set_body_json(serde_json::json!([{"id": 1}]))
-                        .insert_header("Link", format!(r#"<{}/items?page=2>; rel="next""#, http_uri))
+                        .insert_header(
+                            "Link",
+                            format!(r#"<{}/items?page=2>; rel="next""#, http_uri),
+                        )
                         .insert_header("X-Total-Count", "2"),
                 )
                 .up_to_n_times(1)
@@ -1788,14 +1829,14 @@ mod tests {
             Mock::given(matchers::method("GET"))
                 .and(matchers::query_param("page", "2"))
                 .respond_with(
-                    ResponseTemplate::new(200)
-                        .set_body_json(serde_json::json!([{"id": 2}])),
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!([{"id": 2}])),
                 )
                 .mount(&mock_server)
                 .await;
 
             let url = format!("{}/items.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert_eq!(result.len(), 2);
         }
@@ -1805,15 +1846,13 @@ mod tests {
             let (client, mock_server) = create_test_client_with_server().await;
 
             Mock::given(matchers::method("GET"))
-                .respond_with(
-                    ResponseTemplate::new(200)
-                        .set_body_json(serde_json::json!([])),
-                )
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
                 .mount(&mock_server)
                 .await;
 
             let url = format!("{}/empty.json", mock_server.uri());
-            let result: ListResult<serde_json::Value> = client.get_paginated(&url, None).await.unwrap();
+            let result: ListResult<serde_json::Value> =
+                client.get_paginated(&url, None).await.unwrap();
 
             assert!(result.is_empty());
             assert!(!result.meta.truncated);
@@ -1827,8 +1866,7 @@ mod tests {
                 .and(matchers::path("/search.json"))
                 .and(matchers::query_param("q", "test"))
                 .respond_with(
-                    ResponseTemplate::new(200)
-                        .set_body_json(serde_json::json!([{"id": 1}])),
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!([{"id": 1}])),
                 )
                 .mount(&mock_server)
                 .await;

@@ -116,11 +116,11 @@
 ### T13: Hooks
 - [x] Create `src/hooks.rs` with `BasecampHooks` trait (minimal stub created in T12)
 - [x] Define `OperationInfo`, `RequestInfo`, `OperationResult`, `RequestResult` (structs only)
-- [ ] Implement `safe_hook()` panic catching
-- [ ] Implement `chain_hooks()` composition
-- [ ] Implement `ConsoleHooks`, `TimingHooks`
-- [ ] Write unit tests for hook invocation
-- [ ] Verify `cargo test` passes
+- [x] Implement `safe_hook()` panic catching
+- [x] Implement `chain_hooks()` composition
+- [x] Implement `ConsoleHooks`, `TimingHooks`
+- [x] Write unit tests for hook invocation
+- [x] Verify `cargo test` passes
 
 ### T14: Client
 - [ ] Create `src/client.rs` with `Client` and `ClientBuilder`
