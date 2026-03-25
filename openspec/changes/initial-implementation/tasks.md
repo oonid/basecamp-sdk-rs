@@ -50,12 +50,12 @@
 - [x] Verify `cargo test` passes
 
 ### T6: OAuth Token Provider
-- [ ] Create `src/auth/oauth.rs` with `OAuthTokenProvider`
-- [ ] Write unit tests for `is_expired()` with buffer
-- [ ] Write unit tests for token refresh (mock HTTP)
-- [ ] Write unit tests for refresh callback invocation
-- [ ] Write unit tests for thread safety (concurrent access)
-- [ ] Verify `cargo test` passes
+- [x] Create `src/auth/oauth.rs` with `OAuthTokenProvider`
+- [x] Write unit tests for `is_expired()` with buffer
+- [x] Write unit tests for token refresh (mock HTTP)
+- [x] Write unit tests for refresh callback invocation
+- [x] Write unit tests for thread safety (concurrent access)
+- [x] Verify `cargo test` passes
 
 ### T7: Bearer Auth
 - [ ] Create `src/auth/bearer.rs` with `BearerAuth`

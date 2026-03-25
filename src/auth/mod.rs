@@ -1,6 +1,8 @@
+mod oauth;
 mod strategy;
 mod token;
 
+pub use oauth::{OAuthToken, OAuthTokenProvider, OnRefreshCallback};
 pub use strategy::AuthStrategy;
 pub use token::{StaticTokenProvider, TokenProvider};
 

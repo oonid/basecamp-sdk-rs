@@ -3,7 +3,10 @@ pub mod config;
 pub mod error;
 pub mod security;
 
-pub use auth::{AuthStrategy, StaticTokenProvider, TokenProvider};
+pub use auth::{
+    AuthStrategy, OAuthToken, OAuthTokenProvider, OnRefreshCallback, StaticTokenProvider,
+    TokenProvider,
+};
 pub use config::{Config, ConfigBuilder, ConfigError};
 pub use error::{BasecampError, ErrorCode, FieldError};
 pub use security::{
