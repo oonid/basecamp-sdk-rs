@@ -1,0 +1,13 @@
+/target
+/Cargo.lock
+/.opencode
+/.idea
+*.swp
+*.swo
+*~
+.vscode/
+*.iml
+.DS_Store
+lcov.info
+cobertura.xml
+/llvm-cov/
