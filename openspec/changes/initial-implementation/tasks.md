@@ -135,9 +135,9 @@
 - [x] Add `AccountClient` to `src/client.rs`
 - [x] Write unit tests for `for_account(id)` construction
 - [x] Write unit tests for `account_path()` path construction
-- [ ] Write unit tests for lazy service loading
+- [x] Write unit tests for lazy service loading
 - [x] Write unit tests for `Clone` sharing HTTP pool
-- [ ] Verify `cargo test` passes
+- [x] Verify `cargo test` passes
 
 ## Phase 6: Conformance Tests
 

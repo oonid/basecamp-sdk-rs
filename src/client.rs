@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::hooks::BasecampHooks;
 use crate::http::HttpClient;
 use crate::services::AuthorizationService;
+use once_cell::sync::OnceCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -225,6 +226,7 @@ impl Client {
         AccountClient {
             account_id: account_id.into(),
             http: self.http.clone(),
+            projects: OnceCell::new(),
         }
     }
 
@@ -265,6 +267,7 @@ impl Drop for Client {
 pub struct AccountClient {
     account_id: i64,
     http: Arc<HttpClient>,
+    projects: OnceCell<crate::services::ProjectsService>,
 }
 
 impl AccountClient {
@@ -279,6 +282,11 @@ impl AccountClient {
     pub fn http(&self) -> &HttpClient {
         &self.http
     }
+
+    pub fn projects(&self) -> &crate::services::ProjectsService {
+        self.projects
+            .get_or_init(|| crate::services::ProjectsService::new(self.http.clone()))
+    }
 }
 
 impl Clone for AccountClient {
@@ -286,6 +294,7 @@ impl Clone for AccountClient {
         Self {
             account_id: self.account_id,
             http: self.http.clone(),
+            projects: OnceCell::new(),
         }
     }
 }
@@ -526,6 +535,44 @@ mod tests {
             let account2 = account1.clone();
 
             assert!(Arc::ptr_eq(&account1.http, &account2.http));
+        }
+
+        #[test]
+        fn test_projects_lazy_loading() {
+            let client = Client::new("test-token");
+            let account = client.for_account(12345);
+
+            let projects1 = account.projects() as *const _;
+            let projects2 = account.projects() as *const _;
+
+            assert_eq!(projects1, projects2, "Same instance should be returned");
+        }
+
+        #[test]
+        fn test_projects_creates_service_on_first_access() {
+            let client = Client::new("test-token");
+            let account = client.for_account(12345);
+
+            let projects = account.projects();
+            let _service = projects;
+        }
+
+        #[test]
+        fn test_clone_creates_new_projects_cell() {
+            let client = Client::new("test-token");
+            let account1 = client.for_account(12345);
+
+            let _projects1 = account1.projects();
+
+            let account2 = account1.clone();
+
+            let projects2 = account2.projects() as *const _;
+            let projects1 = account1.projects() as *const _;
+
+            assert_ne!(
+                projects1, projects2,
+                "Clone should have its own service instance"
+            );
         }
     }
 
