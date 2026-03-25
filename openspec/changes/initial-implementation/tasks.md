@@ -66,13 +66,13 @@
 ## Phase 3: HTTP Layer (TDD)
 
 ### T8: HTTP Client
-- [ ] Create `src/http/mod.rs`
-- [ ] Create `src/http/client.rs` with `HttpClient`
-- [ ] Write integration tests with `wiremock` for GET
-- [ ] Write integration tests for POST, PUT, DELETE
-- [ ] Write integration tests for `get_absolute()`
-- [ ] Write integration tests for timeout enforcement
-- [ ] Verify `cargo test` passes
+- [x] Create `src/http/mod.rs`
+- [x] Create `src/http/client.rs` with `HttpClient`
+- [x] Write integration tests with `wiremock` for GET
+- [x] Write integration tests for POST, PUT, DELETE
+- [x] Write integration tests for `get_absolute()`
+- [x] Write integration tests for timeout enforcement
+- [x] Verify `cargo test` passes
 
 ### T9: Retry Logic
 - [ ] Create `src/http/retry.rs` with backoff calculation

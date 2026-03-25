@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub const DEFAULT_TOKEN_URL: &str = "https://launchpad.37signals.com/authorization/token";
+#[allow(dead_code)]
 pub const DEFAULT_EXPIRY_BUFFER_SECS: i64 = 60;
 
 #[derive(Debug, Clone)]
@@ -125,16 +126,16 @@ impl TokenProvider for OAuthTokenProvider {
             };
 
             // Basecamp Launchpad Token Refresh Format
-            // 
+            //
             // Basecamp's Launchpad OAuth endpoint uses a non-standard form format
             // for token refresh. Instead of the standard OAuth 2.0 `grant_type=refresh_token`,
             // Launchpad expects `type=refresh`. This is documented in the official SDK spec:
-            // 
+            //
             // - Python SDK: uses `type=refresh` (auth.py:96)
             // - Ruby SDK: uses `type=refresh` (oauth_token_provider.rb)
             // - TypeScript SDK: sends both `type=refresh` AND `grant_type=refresh_token`
             // - Go SDK: uses `grant_type=refresh_token` with client credentials
-            // 
+            //
             // We use `type=refresh` to match Python/Ruby for Launchpad compatibility.
             // See vendor/basecamp-sdk/SPEC.md §4 "Token Refresh" for details.
             let response = self
@@ -270,8 +271,8 @@ mod tests {
 
         #[test]
         fn test_with_refresh_token() {
-            let provider =
-                OAuthTokenProvider::new("access", "client_id", "secret").with_refresh_token("refresh");
+            let provider = OAuthTokenProvider::new("access", "client_id", "secret")
+                .with_refresh_token("refresh");
 
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
@@ -301,8 +302,8 @@ mod tests {
 
         #[test]
         fn test_refreshable_with_refresh_token() {
-            let provider =
-                OAuthTokenProvider::new("access", "client_id", "secret").with_refresh_token("refresh");
+            let provider = OAuthTokenProvider::new("access", "client_id", "secret")
+                .with_refresh_token("refresh");
             assert!(provider.refreshable());
         }
 
@@ -360,9 +361,7 @@ mod tests {
 
             for _ in 0..10 {
                 let p = provider.clone();
-                handles.push(tokio::spawn(async move {
-                    p.access_token()
-                }));
+                handles.push(tokio::spawn(async move { p.access_token() }));
             }
 
             for handle in handles {
@@ -447,9 +446,13 @@ mod tests {
 
             Mock::given(matchers::method("POST"))
                 .and(matchers::body_string_contains("type=refresh"))
-                .and(matchers::body_string_contains("refresh_token=my-refresh-token"))
+                .and(matchers::body_string_contains(
+                    "refresh_token=my-refresh-token",
+                ))
                 .and(matchers::body_string_contains("client_id=my-client-id"))
-                .and(matchers::body_string_contains("client_secret=my-client-secret"))
+                .and(matchers::body_string_contains(
+                    "client_secret=my-client-secret",
+                ))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                     "access_token": "new-token"
                 })))
