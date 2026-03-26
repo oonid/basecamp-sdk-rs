@@ -191,10 +191,10 @@
 - [x] Add README.md usage examples
 
 ### T23: CI Setup
-- [ ] Add `cargo fmt --check` verification
-- [ ] Add `cargo clippy -- -D warnings` verification
-- [ ] Add `cargo llvm-cov` coverage report
-- [ ] Target >90% code coverage
+- [x] Add `cargo fmt --check` verification
+- [x] Add `cargo clippy -- -D warnings` verification
+- [x] Add `cargo llvm-cov` coverage report
+- [x] Target >90% code coverage
 
 ---
 
