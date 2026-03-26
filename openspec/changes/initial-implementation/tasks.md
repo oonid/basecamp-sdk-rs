@@ -155,8 +155,6 @@
 
 ## Phase 7: Conformance Test Fixes
 
-> **Current Status**: 61/61 passing, 0 failing
-
 ### T17: Non-Retryable Errors (7 tests)
 - [x] Fix: 404 Not Found should NOT retry (`retry.json`, `status-codes.json`)
 - [x] Fix: 403 Forbidden should NOT retry (`retry.json`, `status-codes.json`)
@@ -188,15 +186,15 @@
 ## Phase 8: Code Quality
 
 ### T22: Documentation
-- [ ] Add rustdoc comments to all public types
-- [ ] Add examples to crate root (`src/lib.rs`)
-- [ ] Add README.md usage examples
+- [x] Add rustdoc comments to all public types
+- [x] Add examples to crate root (`src/lib.rs`)
+- [x] Add README.md usage examples
 
 ### T23: CI Setup
 - [ ] Add `cargo fmt --check` verification
 - [ ] Add `cargo clippy -- -D warnings` verification
 - [ ] Add `cargo llvm-cov` coverage report
-- [ ] Target >80% code coverage
+- [ ] Target >90% code coverage
 
 ---
 
