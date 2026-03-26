@@ -141,14 +141,18 @@
 
 ## Phase 6: Conformance Tests
 
-### T16: Port Conformance Tests
-- [ ] Create `tests/conformance/mod.rs`
-- [ ] Create `tests/conformance/error_mapping.rs` (port from JSON)
-- [ ] Create `tests/conformance/retry.rs` (port from JSON)
-- [ ] Create `tests/conformance/pagination.rs` (port from JSON)
-- [ ] Create `tests/conformance/security.rs` (port from JSON)
-- [ ] Create `tests/conformance/status_codes.rs` (port from JSON)
-- [ ] Verify all conformance tests pass
+> **Reference**: `vendor/basecamp-sdk/conformance/runner/{go,python,typescript}/`
+
+### T16: Cross-Language Conformance Runner
+- [x] Create `tests/conformance/mod.rs` with module exports
+- [x] Create `tests/conformance/types.rs` with TestCase, MockResponse, Assertion, TestResult, RequestTracker (mirror Go/Python/TS schemas)
+- [x] Create `tests/conformance/runner.rs` with ConformanceRunner (load JSON tests, skip mechanism, summary reporting)
+- [x] Use `wiremock` for HTTP mocking (equivalent to Python's `respx`, TypeScript's `msw`)
+- [x] Create `tests/conformance/operations.rs` with OperationDispatcher for all operations
+- [x] Create `tests/conformance/assertions.rs` with all assertion types
+- [x] Implement SDK-specific skip list (like Python's `SKIPS`, TypeScript's `TS_SDK_SKIPS`)
+- [ ] Verify all tests in `vendor/basecamp-sdk/conformance/tests/*.json` pass (17/61 passing, 44 failing due to SDK gaps)
+- [x] Verify `cargo test` passes
 
 ## Phase 7: Code Quality
 
