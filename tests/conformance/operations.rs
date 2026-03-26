@@ -10,15 +10,13 @@ pub struct OperationDispatcher {
 
 impl OperationDispatcher {
     pub fn new(http_client: HttpClient) -> Self {
-        Self {
-            http_client,
-        }
+        Self { http_client }
     }
 
     pub async fn execute(&self, tc: &TestCase) -> OperationResult {
         let path = self.build_path(tc);
         let method = tc.method.as_deref().unwrap_or("GET").to_uppercase();
-        
+
         match method.as_str() {
             "GET" => self.execute_get(tc, &path).await,
             "POST" => self.execute_post(tc, &path).await,
@@ -38,19 +36,22 @@ impl OperationDispatcher {
 
     fn build_path(&self, tc: &TestCase) -> String {
         let mut path = tc.path.clone().unwrap_or_default();
-        
+
         for (key, value) in &tc.path_params {
             path = path.replace(&format!("{{{}}}", key), &value_to_string(value));
         }
-        
+
         path
     }
 
     async fn execute_get(&self, tc: &TestCase, path: &str) -> OperationResult {
         match tc.operation.as_str() {
             "ListProjects" | "ListTodos" | "ListWebhooks" => {
-                let result = self.http_client.get_paginated::<serde_json::Value>(path, None).await;
-                
+                let result = self
+                    .http_client
+                    .get_paginated::<serde_json::Value>(path, None)
+                    .await;
+
                 match result {
                     Ok(list_result) => {
                         let mut meta = HashMap::new();
@@ -62,7 +63,7 @@ impl OperationDispatcher {
                             "truncated".to_string(),
                             serde_json::json!(list_result.meta.truncated),
                         );
-                        
+
                         OperationResult {
                             error: None,
                             http_status: Some(200),
@@ -80,11 +81,12 @@ impl OperationDispatcher {
             }
             _ => {
                 let result = self.http_client.get(path, None).await;
-                
+
                 match result {
                     Ok(response) => {
                         let status = response.status().as_u16();
-                        let body: serde_json::Value = response.json().await.unwrap_or(serde_json::json!(null));
+                        let body: serde_json::Value =
+                            response.json().await.unwrap_or(serde_json::json!(null));
                         OperationResult {
                             error: None,
                             http_status: Some(status),
@@ -108,13 +110,14 @@ impl OperationDispatcher {
 
     async fn execute_post(&self, tc: &TestCase, path: &str) -> OperationResult {
         let body = tc.request_body.as_ref();
-        
+
         let result = self.http_client.post(path, body, Some(&tc.operation)).await;
-        
+
         match result {
             Ok(response) => {
                 let status = response.status().as_u16();
-                let body: serde_json::Value = response.json().await.unwrap_or(serde_json::json!(null));
+                let body: serde_json::Value =
+                    response.json().await.unwrap_or(serde_json::json!(null));
                 OperationResult {
                     error: None,
                     http_status: Some(status),
@@ -136,13 +139,14 @@ impl OperationDispatcher {
 
     async fn execute_put(&self, tc: &TestCase, path: &str) -> OperationResult {
         let body = tc.request_body.as_ref();
-        
+
         let result = self.http_client.put(path, body, Some(&tc.operation)).await;
-        
+
         match result {
             Ok(response) => {
                 let status = response.status().as_u16();
-                let body: serde_json::Value = response.json().await.unwrap_or(serde_json::json!(null));
+                let body: serde_json::Value =
+                    response.json().await.unwrap_or(serde_json::json!(null));
                 OperationResult {
                     error: None,
                     http_status: Some(status),
@@ -164,7 +168,7 @@ impl OperationDispatcher {
 
     async fn execute_delete(&self, _tc: &TestCase, path: &str) -> OperationResult {
         let result = self.http_client.delete(path, None).await;
-        
+
         match result {
             Ok(response) => {
                 let status = response.status().as_u16();

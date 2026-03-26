@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct TestCase {
     pub name: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub description: Option<String>,
     pub operation: String,
     #[serde(default)]
@@ -14,6 +15,7 @@ pub struct TestCase {
     #[serde(default, alias = "pathParams")]
     pub path_params: HashMap<String, serde_json::Value>,
     #[serde(default, alias = "queryParams")]
+    #[allow(dead_code)]
     pub query_params: HashMap<String, serde_json::Value>,
     #[serde(default, alias = "requestBody")]
     pub request_body: Option<serde_json::Value>,
@@ -21,6 +23,7 @@ pub struct TestCase {
     pub mock_responses: Vec<MockResponse>,
     pub assertions: Vec<Assertion>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub tags: Vec<String>,
     #[serde(default, alias = "configOverrides")]
     pub config_overrides: Option<ConfigOverrides>,
@@ -56,6 +59,7 @@ pub struct Assertion {
     #[serde(default)]
     pub min: Option<f64>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub max: Option<f64>,
     #[serde(default)]
     pub path: Option<String>,
@@ -106,6 +110,7 @@ impl RequestTracker {
         self.headers.push(headers);
     }
 
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.count = 0;
         self.times.clear();
@@ -124,6 +129,7 @@ impl RequestTracker {
 #[derive(Debug)]
 pub struct OperationResult {
     pub error: Option<basecamp_sdk_rs::BasecampError>,
+    #[allow(dead_code)]
     pub http_status: Option<u16>,
     pub meta: Option<HashMap<String, serde_json::Value>>,
     pub body: Option<serde_json::Value>,

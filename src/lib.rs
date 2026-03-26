@@ -30,21 +30,18 @@
 //! ### Using a Static Token
 //!
 //! ```rust,no_run
-//! use basecamp_sdk_rs::{Client, Config, BearerAuth};
+//! use basecamp_sdk_rs::Client;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Configure the client
-//!     let config = Config::builder()
-//!         .base_url("https://3.basecampapi.com/999")
-//!         .build()?;
+//!     // Create client with access token
+//!     let client = Client::new("your-access-token");
 //!
-//!     // Use a static token
-//!     let auth = BearerAuth::from_token("your-access-token");
-//!     let client = Client::new(config, auth)?;
+//!     // Get account-scoped client
+//!     let account = client.for_account(999);
 //!
 //!     // List all projects
-//!     let projects = client.get_paginated::<serde_json::Value>("/projects.json", None).await?;
+//!     let projects = account.http().get_paginated::<serde_json::Value>("/projects.json", None).await?;
 //!     for project in projects.items {
 //!         println!("{:?}", project);
 //!     }
@@ -58,7 +55,7 @@
 //! ### Builder Pattern
 //!
 //! ```rust
-//! use basecamp_sdk_rs::Config;
+//! use basecamp_sdk_rs::{Client, Config};
 //!
 //! let config = Config::builder()
 //!     .base_url("https://3.basecampapi.com/999")
@@ -67,7 +64,12 @@
 //!     .max_pages(100)
 //!     .max_items(1000)
 //!     .build()?;
-//! # Ok::<(), basecamp_sdk_rs::ConfigError>(())
+//!
+//! let client = Client::builder()
+//!     .access_token("your-token")
+//!     .config(config)
+//!     .build()?;
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ### Environment Variables
@@ -83,21 +85,34 @@
 //! ### Static Token
 //!
 //! ```rust
-//! use basecamp_sdk_rs::{BearerAuth, Config, Client};
+//! use basecamp_sdk_rs::Client;
 //!
-//! let auth = BearerAuth::from_token("your-token");
-//! let client = Client::new(config, auth)?;
+//! // Simple case
+//! let client = Client::new("your-token");
+//!
+//! // Or with builder
+//! let client = Client::builder()
+//!     .access_token("your-token")
+//!     .build()?;
 //! # Ok::<(), basecamp_sdk_rs::ClientError>(())
 //! ```
 //!
 //! ### OAuth 2.0 with Token Refresh
 //!
-//! ```rust
-//! use basecamp_sdk_rs::{OAuthToken, Config, Client};
+//! ```rust,no_run
+//! use basecamp_sdk_rs::{Client, OAuthTokenProvider};
+//! use std::sync::Arc;
 //!
-//! // Implement TokenProvider for automatic token refresh
-//! let token_provider = MyTokenProvider::new();
-//! let client = Client::new(config, token_provider)?;
+//! // Use OAuthTokenProvider for automatic token refresh
+//! let provider = OAuthTokenProvider::new(
+//!     "your-access-token",
+//!     "your-client-id",
+//!     "your-client-secret",
+//! );
+//!
+//! let client = Client::builder()
+//!     .token_provider(provider)
+//!     .build()?;
 //! # Ok::<(), basecamp_sdk_rs::ClientError>(())
 //! ```
 //!
@@ -106,23 +121,22 @@
 //! The SDK provides structured errors with codes for programmatic handling:
 //!
 //! ```rust,no_run
-//! use basecamp_sdk_rs::{Client, Config, BearerAuth, BasecampError, ErrorCode};
+//! use basecamp_sdk_rs::{Client, BasecampError};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let config = Config::builder().base_url("https://3.basecampapi.com/999").build()?;
-//! let auth = BearerAuth::from_token("token");
-//! let client = Client::new(config, auth)?;
+//! let client = Client::new("token");
+//! let account = client.for_account(999);
 //!
-//! match client.get("/projects/99999.json", None).await {
+//! match account.http().get("/projects/99999.json", None).await {
 //!     Ok(response) => println!("Success: {:?}", response.status()),
 //!     Err(e) => {
-//!         match e {
-//!             BasecampError::NotFound { message, .. } => {
-//!                 eprintln!("Not found: {}", message);
+//!         match &e {
+//!             BasecampError::NotFound { resource_id, .. } => {
+//!                 eprintln!("Not found: {:?}", resource_id);
 //!             }
-//!             BasecampError::AuthRequired { message, .. } => {
-//!                 eprintln!("Auth required: {}", message);
+//!             BasecampError::AuthRequired { hint, .. } => {
+//!                 eprintln!("Auth required. Hint: {:?}", hint);
 //!             }
 //!             BasecampError::RateLimit { retry_after, .. } => {
 //!                 eprintln!("Rate limited. Retry after: {:?}", retry_after);
@@ -156,20 +170,24 @@
 //! Use `get_paginated` for automatic pagination:
 //!
 //! ```rust,no_run
-//! use basecamp_sdk_rs::{Client, Config, BearerAuth};
+//! use basecamp_sdk_rs::{Client, Config};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = Config::builder()
-//!     .base_url("https://3.basecampapi.com/999")
 //!     .max_pages(10)      // Limit pages
 //!     .max_items(500)     // Limit total items
 //!     .build()?;
-//! let auth = BearerAuth::from_token("token");
-//! let client = Client::new(config, auth)?;
+//!
+//! let client = Client::builder()
+//!     .access_token("token")
+//!     .config(config)
+//!     .build()?;
+//!
+//! let account = client.for_account(999);
 //!
 //! // Fetch all pages automatically
-//! let result = client.get_paginated::<serde_json::Value>("/projects.json", None).await?;
+//! let result = account.http().get_paginated::<serde_json::Value>("/projects.json", None).await?;
 //!
 //! println!("Fetched {} items", result.items.len());
 //! println!("Truncated: {}", result.meta.truncated);
@@ -194,12 +212,12 @@
 //! ### Console Logging
 //!
 //! ```rust
-//! use basecamp_sdk_rs::{Client, Config, BearerAuth, console_hooks};
+//! use basecamp_sdk_rs::{Client, ConsoleHooks};
 //!
-//! let config = Config::builder().base_url("https://3.basecampapi.com/999").build()?;
-//! let auth = BearerAuth::from_token("token");
-//! let hooks = console_hooks();
-//! let client = Client::with_hooks(config, auth, hooks)?;
+//! let client = Client::builder()
+//!     .access_token("token")
+//!     .hooks(ConsoleHooks::new())
+//!     .build()?;
 //! # Ok::<(), basecamp_sdk_rs::ClientError>(())
 //! ```
 //!
@@ -224,34 +242,40 @@
 //!     }
 //!
 //!     fn on_operation_end(&self, info: &OperationInfo, result: &OperationResult) {
-//!         println!("Completed in {}ms", result.duration_ms);
+//!         println!("Completed in {:?}", result.duration);
 //!     }
 //!
 //!     fn on_request_end(&self, info: &RequestInfo, result: &RequestResult) {
-//!         println!("{} {} -> {} ({}ms)", 
-//!             info.method, info.url, result.status, result.duration_ms);
+//!         println!("{} {} -> {} ({:?})",
+//!             info.method, info.url, result.status.unwrap_or(0), result.duration);
 //!     }
 //! }
 //! ```
 //!
 //! ## HTTPS Enforcement
 //!
-//! The SDK enforces HTTPS for non-localhost URLs:
+//! The SDK enforces HTTPS for non-localhost URLs at request time:
 //!
-//! ```rust
-//! use basecamp_sdk_rs::Config;
+//! ```rust,no_run
+//! use basecamp_sdk_rs::Client;
 //!
-//! // This will fail
-//! let result = Config::builder()
-//!     .base_url("http://api.example.com/999")
-//!     .build();
-//! assert!(result.is_err());
-//!
-//! // Localhost is allowed
-//! let config = Config::builder()
-//!     .base_url("http://localhost:8080/999")
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // HTTP URLs are rejected for non-localhost when making requests
+//! let client = Client::builder()
+//!     .access_token("token")
 //!     .build()?;
-//! # Ok::<(), basecamp_sdk_rs::ConfigError>(())
+//!
+//! // This would fail at request time:
+//! // let account = client.for_account(999);
+//! // account.http().get_absolute("http://api.example.com/data").await?;
+//! // // Error: Usage error: HTTPS required for non-localhost URLs
+//!
+//! // Localhost URLs are allowed:
+//! let account = client.for_account(999);
+//! // account.http().get_absolute("http://localhost:8080/data").await?;
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod auth;

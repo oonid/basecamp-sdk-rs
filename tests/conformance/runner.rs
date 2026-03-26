@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use basecamp_sdk_rs::{BearerAuth, Config, HttpClient};
-use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 use wiremock::matchers::method;
+use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
 use super::types::{RequestTracker, TestCase, TestResult};
 use crate::conformance::assertions::check_assertions;
@@ -46,7 +46,10 @@ impl ConformanceRunner {
 
         for file in files {
             let tests = self.load_tests(&file);
-            println!("\n=== {} ===", file.file_name().unwrap_or_default().to_string_lossy());
+            println!(
+                "\n=== {} ===",
+                file.file_name().unwrap_or_default().to_string_lossy()
+            );
 
             for tc in tests {
                 if let Some(reason) = self.skips.get(&tc.name) {
@@ -122,9 +125,13 @@ impl ConformanceRunner {
         let tracker = Arc::new(Mutex::new(RequestTracker::new()));
         let mock_server = MockServer::start().await;
 
-        self.setup_mock_handlers(&mock_server, tc, tracker.clone()).await;
+        self.setup_mock_handlers(&mock_server, tc, tracker.clone())
+            .await;
 
-        let base_url = tc.config_overrides.as_ref().and_then(|c| c.base_url.clone())
+        let base_url = tc
+            .config_overrides
+            .as_ref()
+            .and_then(|c| c.base_url.clone())
             .unwrap_or_else(|| format!("{}/{}", mock_server.uri(), TEST_ACCOUNT_ID));
 
         let mut config_builder = Config::builder().base_url(&base_url);
