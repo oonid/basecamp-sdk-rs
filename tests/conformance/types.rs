@@ -11,18 +11,18 @@ pub struct TestCase {
     pub method: Option<String>,
     #[serde(default)]
     pub path: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "pathParams")]
     pub path_params: HashMap<String, serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, alias = "queryParams")]
     pub query_params: HashMap<String, serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, alias = "requestBody")]
     pub request_body: Option<serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, alias = "mockResponses")]
     pub mock_responses: Vec<MockResponse>,
     pub assertions: Vec<Assertion>,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(default)]
+    #[serde(default, alias = "configOverrides")]
     pub config_overrides: Option<ConfigOverrides>,
 }
 

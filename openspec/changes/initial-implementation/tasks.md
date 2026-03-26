@@ -151,17 +151,48 @@
 - [x] Create `tests/conformance/operations.rs` with OperationDispatcher for all operations
 - [x] Create `tests/conformance/assertions.rs` with all assertion types
 - [x] Implement SDK-specific skip list (like Python's `SKIPS`, TypeScript's `TS_SDK_SKIPS`)
-- [ ] Verify all tests in `vendor/basecamp-sdk/conformance/tests/*.json` pass (17/61 passing, 44 failing due to SDK gaps)
 - [x] Verify `cargo test` passes
 
-## Phase 7: Code Quality
+## Phase 7: Conformance Test Fixes
 
-### T17: Documentation
+> **Current Status**: 57/61 passing, 4 failing
+
+### T17: Non-Retryable Errors (7 tests)
+- [x] Fix: 404 Not Found should NOT retry (`retry.json`, `status-codes.json`)
+- [x] Fix: 403 Forbidden should NOT retry (`retry.json`, `status-codes.json`)
+- [x] Fix: 401 Unauthorized should NOT retry (`status-codes.json`)
+- [x] Fix: 422 Validation Error should NOT retry (`status-codes.json`)
+- [x] Root cause: Double-counting in conformance test `operations.rs` - removed redundant `record_request()` calls
+
+### T18: POST Non-Idempotency (2 tests)
+- [ ] Fix: POST with 503 should NOT retry (`retry.json`)
+- [ ] Fix: POST with 429 should NOT retry (`retry.json`)
+- [ ] Root cause: `src/http/client.rs` - POST requests being treated as retryable
+
+### T19: Request Count Mismatches (3 tests)
+- [ ] Fix: GET 429 with Retry-After - expected 2 requests, got 3 (`retry.json`)
+- [ ] Fix: Retry-After HTTP-date format - expected 2 requests, got 3 (`retry.json`)
+- [ ] Fix: GET 503 retry - JSON parse error on response (`retry.json`)
+- [ ] Root cause: `src/http/retry.rs` - retry count or backoff timing issues
+
+### T20: HTTPS Enforcement (1 test)
+- [ ] Fix: HTTP URL should be rejected for non-localhost (`security.json`)
+- [ ] Root cause: `src/config.rs` or `src/http/client.rs` - `require_https()` not enforced during client construction
+
+### T21: PUT/DELETE Idempotency (5 tests)
+- [ ] Fix: PUT 503 should retry (idempotent) (`idempotency.json`)
+- [ ] Fix: DELETE 503 should retry (idempotent) (`idempotency.json`)
+- [ ] Verify: PUT/DELETE treated as idempotent in retry logic
+- [ ] Root cause: `src/http/retry.rs` - idempotency check for PUT/DELETE
+
+## Phase 8: Code Quality
+
+### T22: Documentation
 - [ ] Add rustdoc comments to all public types
 - [ ] Add examples to crate root (`src/lib.rs`)
 - [ ] Add README.md usage examples
 
-### T18: CI Setup
+### T23: CI Setup
 - [ ] Add `cargo fmt --check` verification
 - [ ] Add `cargo clippy -- -D warnings` verification
 - [ ] Add `cargo llvm-cov` coverage report
@@ -171,11 +202,11 @@
 
 ## Definition of Done
 
-- [ ] All tasks completed
+- [ ] All tasks completed (T1-T23)
 - [ ] All tests pass (`cargo test`)
 - [ ] No clippy warnings (`cargo clippy`)
 - [ ] Code formatted (`cargo fmt --check`)
 - [ ] Coverage >80% (`cargo llvm-cov`)
-- [ ] Conformance tests pass
+- [ ] Conformance tests pass (61/61)
 - [ ] Documentation complete
 - [ ] PR reviewed and merged

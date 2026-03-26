@@ -1,20 +1,17 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use basecamp_sdk_rs::{BasecampError, HttpClient};
 
-use super::types::{OperationResult, RequestTracker, TestCase};
+use super::types::{OperationResult, TestCase};
 
 pub struct OperationDispatcher {
     http_client: HttpClient,
-    tracker: Arc<Mutex<RequestTracker>>,
 }
 
 impl OperationDispatcher {
-    pub fn new(http_client: HttpClient, tracker: Arc<Mutex<RequestTracker>>) -> Self {
+    pub fn new(http_client: HttpClient) -> Self {
         Self {
             http_client,
-            tracker,
         }
     }
 
@@ -53,7 +50,6 @@ impl OperationDispatcher {
         match tc.operation.as_str() {
             "ListProjects" | "ListTodos" | "ListWebhooks" => {
                 let result = self.http_client.get_paginated::<serde_json::Value>(path, None).await;
-                self.record_request(path);
                 
                 match result {
                     Ok(list_result) => {
@@ -84,7 +80,6 @@ impl OperationDispatcher {
             }
             _ => {
                 let result = self.http_client.get(path, None).await;
-                self.record_request(path);
                 
                 match result {
                     Ok(response) => {
@@ -115,7 +110,6 @@ impl OperationDispatcher {
         let body = tc.request_body.as_ref();
         
         let result = self.http_client.post(path, body, Some(&tc.operation)).await;
-        self.record_request(path);
         
         match result {
             Ok(response) => {
@@ -144,7 +138,6 @@ impl OperationDispatcher {
         let body = tc.request_body.as_ref();
         
         let result = self.http_client.put(path, body, Some(&tc.operation)).await;
-        self.record_request(path);
         
         match result {
             Ok(response) => {
@@ -171,7 +164,6 @@ impl OperationDispatcher {
 
     async fn execute_delete(&self, _tc: &TestCase, path: &str) -> OperationResult {
         let result = self.http_client.delete(path, None).await;
-        self.record_request(path);
         
         match result {
             Ok(response) => {
@@ -193,11 +185,6 @@ impl OperationDispatcher {
                 }
             }
         }
-    }
-
-    fn record_request(&self, path: &str) {
-        let mut tracker = self.tracker.lock().unwrap();
-        tracker.record(path.to_string(), vec![]);
     }
 }
 

@@ -11,3 +11,6 @@
 lcov.info
 cobertura.xml
 /llvm-cov/
+
+# Conformance test output
+/conformance/

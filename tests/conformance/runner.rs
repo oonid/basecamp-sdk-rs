@@ -149,7 +149,7 @@ impl ConformanceRunner {
             Err(e) => return TestResult::fail(&tc.name, &e.to_string()),
         };
 
-        let dispatcher = OperationDispatcher::new(http_client, tracker.clone());
+        let dispatcher = OperationDispatcher::new(http_client);
         let op_result = dispatcher.execute(tc).await;
 
         let tracker_guard = tracker.lock().unwrap();
@@ -167,55 +167,69 @@ impl ConformanceRunner {
     ) {
         let responses = tc.mock_responses.clone();
         let response_index = Arc::new(Mutex::new(0usize));
+        let paginates = responses.iter().any(|mr| {
+            mr.headers
+                .get("Link")
+                .map(|l| l.contains("rel=\"next\""))
+                .unwrap_or(false)
+        });
 
-        for http_method in &["GET", "POST", "PUT", "DELETE"] {
-            let responses_clone = responses.clone();
-            let response_index_clone = response_index.clone();
-            let tracker_clone = tracker.clone();
+        let http_method = tc.method.clone().unwrap_or_else(|| "GET".to_string());
+        let responses_clone = responses.clone();
+        let response_index_clone = response_index.clone();
+        let tracker_clone = tracker.clone();
+        let paginates_clone = paginates;
+        let http_method_for_log = http_method.clone();
 
-            Mock::given(method(http_method.to_string()))
-                .respond_with(move |request: &Request| {
-                    {
-                        let mut t = tracker_clone.lock().unwrap();
-                        let mut headers_vec: Vec<(String, String)> = Vec::new();
-                        for (name, value) in request.headers.iter() {
-                            let name_str: String = name.to_string();
-                            let value_str: String = value.to_str().unwrap_or_default().to_string();
-                            headers_vec.push((name_str, value_str));
-                        }
-                        t.record(request.url.path().to_string(), headers_vec);
+        Mock::given(method(http_method))
+            .respond_with(move |request: &Request| {
+                let idx = {
+                    let mut guard = response_index_clone.lock().unwrap();
+                    let i = *guard;
+                    *guard += 1;
+                    i
+                };
+
+                eprintln!("[MOCK] {} {} -> idx={}", http_method_for_log, request.url.path(), idx);
+
+                {
+                    let mut t = tracker_clone.lock().unwrap();
+                    let mut headers_vec: Vec<(String, String)> = Vec::new();
+                    for (name, value) in request.headers.iter() {
+                        let name_str: String = name.to_string();
+                        let value_str: String = value.to_str().unwrap_or_default().to_string();
+                        headers_vec.push((name_str, value_str));
                     }
+                    t.record(request.url.path().to_string(), headers_vec);
+                }
 
-                    let idx = {
-                        let mut guard = response_index_clone.lock().unwrap();
-                        let i = *guard;
-                        *guard += 1;
-                        i
-                    };
-
-                    if idx >= responses_clone.len() {
+                if idx >= responses_clone.len() {
+                    if paginates_clone {
                         return ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
+                    } else {
+                        return ResponseTemplate::new(500)
+                            .set_body_json(serde_json::json!({"error": "No more mock responses"}));
                     }
+                }
 
-                    let mock_resp = &responses_clone[idx];
-                    let mut template = ResponseTemplate::new(mock_resp.status);
+                let mock_resp = &responses_clone[idx];
+                let mut template = ResponseTemplate::new(mock_resp.status);
 
-                    if let Some(delay) = mock_resp.delay {
-                        template = template.set_delay(Duration::from_millis(delay));
-                    }
+                if let Some(delay) = mock_resp.delay {
+                    template = template.set_delay(Duration::from_millis(delay));
+                }
 
-                    for (key, value) in &mock_resp.headers {
-                        template = template.insert_header(key.clone(), value.clone());
-                    }
+                for (key, value) in &mock_resp.headers {
+                    template = template.insert_header(key.clone(), value.clone());
+                }
 
-                    if let Some(ref body) = mock_resp.body {
-                        template = template.set_body_json(body.clone());
-                    }
+                if let Some(ref body) = mock_resp.body {
+                    template = template.set_body_json(body.clone());
+                }
 
-                    template
-                })
-                .mount(mock_server)
-                .await;
-        }
+                template
+            })
+            .mount(mock_server)
+            .await;
     }
 }

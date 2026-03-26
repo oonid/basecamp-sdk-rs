@@ -79,14 +79,7 @@ pub fn should_retry_with_config(
     is_post: bool,
     retry_after: Option<Duration>,
 ) -> RetryDecision {
-    let ctx = RetryContext::new(attempt, config.max_retries, is_idempotent, is_post);
-
-    let delay = match retry_after {
-        Some(ra) => ra,
-        None => calculate_backoff(attempt, config.base_delay, config.max_jitter),
-    };
-
-    if ctx.attempt >= ctx.max_retries {
+    if attempt >= config.max_retries {
         return RetryDecision::DontRetry;
     }
 
@@ -94,9 +87,14 @@ pub fn should_retry_with_config(
         return RetryDecision::DontRetry;
     }
 
-    if ctx.is_post && !ctx.is_idempotent {
+    if is_post && !is_idempotent {
         return RetryDecision::DontRetry;
     }
+
+    let delay = match retry_after {
+        Some(ra) => ra,
+        None => calculate_backoff(attempt, config.base_delay, config.max_jitter),
+    };
 
     RetryDecision::Retry { delay }
 }
