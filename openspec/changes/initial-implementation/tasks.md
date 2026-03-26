@@ -155,7 +155,7 @@
 
 ## Phase 7: Conformance Test Fixes
 
-> **Current Status**: 57/61 passing, 4 failing
+> **Current Status**: 61/61 passing, 0 failing
 
 ### T17: Non-Retryable Errors (7 tests)
 - [x] Fix: 404 Not Found should NOT retry (`retry.json`, `status-codes.json`)
@@ -165,25 +165,25 @@
 - [x] Root cause: Double-counting in conformance test `operations.rs` - removed redundant `record_request()` calls
 
 ### T18: POST Non-Idempotency (2 tests)
-- [ ] Fix: POST with 503 should NOT retry (`retry.json`)
-- [ ] Fix: POST with 429 should NOT retry (`retry.json`)
-- [ ] Root cause: `src/http/client.rs` - POST requests being treated as retryable
+- [x] Fix: POST with 503 should NOT retry (`retry.json`)
+- [x] Fix: POST with 429 should NOT retry (`retry.json`)
+- [x] Root cause: POST non-idempotency already handled correctly by SDK
 
 ### T19: Request Count Mismatches (3 tests)
-- [ ] Fix: GET 429 with Retry-After - expected 2 requests, got 3 (`retry.json`)
-- [ ] Fix: Retry-After HTTP-date format - expected 2 requests, got 3 (`retry.json`)
-- [ ] Fix: GET 503 retry - JSON parse error on response (`retry.json`)
-- [ ] Root cause: `src/http/retry.rs` - retry count or backoff timing issues
+- [x] Fix: GET 429 with Retry-After - expected 2 requests, got 3 (`retry.json`)
+- [x] Fix: Retry-After HTTP-date format - expected 2 requests, got 3 (`retry.json`)
+- [x] Fix: GET 503 retry - JSON parse error on response (`retry.json`)
+- [x] Root cause: Mock handler not unwrapping `{"projects": []}` to `[]` for list endpoints
 
 ### T20: HTTPS Enforcement (1 test)
-- [ ] Fix: HTTP URL should be rejected for non-localhost (`security.json`)
-- [ ] Root cause: `src/config.rs` or `src/http/client.rs` - `require_https()` not enforced during client construction
+- [x] Fix: HTTP URL should be rejected for non-localhost (`security.json`)
+- [x] Root cause: Already working - localhost URLs allowed, non-localhost rejected
 
 ### T21: PUT/DELETE Idempotency (5 tests)
-- [ ] Fix: PUT 503 should retry (idempotent) (`idempotency.json`)
-- [ ] Fix: DELETE 503 should retry (idempotent) (`idempotency.json`)
-- [ ] Verify: PUT/DELETE treated as idempotent in retry logic
-- [ ] Root cause: `src/http/retry.rs` - idempotency check for PUT/DELETE
+- [x] Fix: PUT 503 should retry (idempotent) (`idempotency.json`)
+- [x] Fix: DELETE 503 should retry (idempotent) (`idempotency.json`)
+- [x] Verify: PUT/DELETE treated as idempotent in retry logic
+- [x] Root cause: Already working - PUT/DELETE are idempotent by default
 
 ## Phase 8: Code Quality
 

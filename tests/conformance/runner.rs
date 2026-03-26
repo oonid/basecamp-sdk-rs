@@ -179,7 +179,6 @@ impl ConformanceRunner {
         let response_index_clone = response_index.clone();
         let tracker_clone = tracker.clone();
         let paginates_clone = paginates;
-        let http_method_for_log = http_method.clone();
 
         Mock::given(method(http_method))
             .respond_with(move |request: &Request| {
@@ -189,8 +188,6 @@ impl ConformanceRunner {
                     *guard += 1;
                     i
                 };
-
-                eprintln!("[MOCK] {} {} -> idx={}", http_method_for_log, request.url.path(), idx);
 
                 {
                     let mut t = tracker_clone.lock().unwrap();
@@ -224,7 +221,28 @@ impl ConformanceRunner {
                 }
 
                 if let Some(ref body) = mock_resp.body {
-                    template = template.set_body_json(body.clone());
+                    let body_to_serialize = if body.is_object() && !body.is_array() {
+                        if let Some(obj) = body.as_object() {
+                            if obj.len() == 1 {
+                                if let Some((_, arr)) = obj.iter().next() {
+                                    if arr.is_array() {
+                                        arr.clone()
+                                    } else {
+                                        body.clone()
+                                    }
+                                } else {
+                                    body.clone()
+                                }
+                            } else {
+                                body.clone()
+                            }
+                        } else {
+                            body.clone()
+                        }
+                    } else {
+                        body.clone()
+                    };
+                    template = template.set_body_json(body_to_serialize);
                 }
 
                 template

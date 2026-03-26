@@ -28,11 +28,11 @@ pub struct TestCase {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfigOverrides {
-    #[serde(default)]
+    #[serde(default, alias = "baseUrl")]
     pub base_url: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "maxPages")]
     pub max_pages: Option<u32>,
-    #[serde(default)]
+    #[serde(default, alias = "maxItems")]
     pub max_items: Option<u32>,
 }
 
