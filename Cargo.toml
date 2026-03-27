@@ -26,3 +26,12 @@ rand = "0.8"
 wiremock = "0.6"
 tokio-test = "0.4"
 serial_test = "3.0"
+
+# Forced dependency versions for Rust 1.75 compatibility
+# After adding these, run: rm Cargo.lock && cargo generate-lockfile && cargo update -p idna_adapter --precise 1.2.0
+# Verify with: cargo tree -p idna_adapter
+idna_adapter = "=1.2.0"  # refer https://crates.io/crates/idna_adapter/versions for v1.67.0
+# Additional pinned versions to prevent newer incompatible versions
+litemap = "=0.7.4"                      # refer https://crates.io/crates/litemap/versions for v1.71.1
+zerofrom = "=0.1.5"                     # refer https://crates.io/crates/zerofrom/versions for v1.71.1
+indexmap = "=2.11.4"                    # refer https://crates.io/crates/indexmap/versions for v1.63.0
